@@ -1,0 +1,38 @@
+{
+  "name": "mikopbx/moduleautoprovision",
+  "description": "ModuleAutoprovision",
+  "require": {
+    "mikopbx/core": "^2020.2.757",
+    "ext-sockets": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Modules\\ModuleAutoprovision\\": "/"
+    }
+  },
+  "type": "application",
+  "keywords": [
+    "pbx",
+    "asterisk",
+    "freepbx"
+  ],
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://github.com/mikopbx/ModuleTemplate",
+  "authors": [
+    {
+      "name": "Alexey Portnov",
+      "email": "apor@miko.ru"
+    },
+    {
+      "name": "Nikolay Beketov",
+      "email": "nbek@miko.ru"
+    }
+  ],
+  "config": {
+    "sort-packages": true,
+    "platform": {
+      "php": "7.2"
+    }
+  }
+
+}
