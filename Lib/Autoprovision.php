@@ -15,9 +15,9 @@ use MikoPBX\Core\Asterisk\AGI;
 use MikoPBX\Core\System\MikoPBXConfig;
 use MikoPBX\Core\System\Network;
 use MikoPBX\Core\System\Util;
-use MikoPBX\Modules\PbxExtensionBase;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionUsers;
+use Phalcon\Di;
 
 class Autoprovision extends Di\Injectable
 {
