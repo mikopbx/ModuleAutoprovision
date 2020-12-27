@@ -344,14 +344,16 @@ class WorkerProvisioningServerPnP extends WorkerBase
         if ($real_mac !== $headers['mac']) {
             Util::sysLogMsg(
                 $this->class_name,
-                'The mac address of the device does not match the address in the sip request r_mac: ' . $real_mac . ' mac: ' . $headers['mac']
+                'The mac address of the device does not match the address in the sip request r_mac: ' . $real_mac . ' mac: ' . $headers['mac'],
+                LOG_NOTICE
             );
         }
 
         if ( ! empty($headers['mac']) && ! empty($headers['phone_ip'])) {
             Util::sysLogMsg(
                 $this->class_name,
-                "Request provisiong from ip: {$headers['phone_ip']}; phone: {$headers['Event']['vendor']} {$headers['Event']['model']}; mac=" . $real_mac
+                "Request provisiong from ip: {$headers['phone_ip']}; phone: {$headers['Event']['vendor']} {$headers['Event']['model']}; mac=" . $real_mac,
+                LOG_NOTICE
             );
             file_put_contents(
                 $this->requests_dir . '/' . $headers['mac'],
@@ -463,10 +465,10 @@ class WorkerProvisioningServerPnP extends WorkerBase
                     socket_sendto($sock, $msg, $len, 0, $ip, $port);
                 }
             } catch (\Throwable $e) {
-                Util::sysLogMsg($this->class_name, $e->getMessage());
+                Util::sysLogMsg($this->class_name, $e->getMessage(), LOG_ERR);
             }
         } else {
-            Util::sysLogMsg($this->class_name, "Host lookup failed $ip:$port...");
+            Util::sysLogMsg($this->class_name, "Host lookup failed $ip:$port...", LOG_ERR);
         }
     }
 
@@ -483,7 +485,7 @@ if (isset($argv) && count($argv) > 1) {
     } catch (\Throwable $e) {
         global $errorLogger;
         $errorLogger->captureException($e);
-        Util::sysLogMsg("{$workerClassname}_EXCEPTION", $e->getMessage());
+        Util::sysLogMsg("{$workerClassname}_EXCEPTION", $e->getMessage(), LOG_ERR);
     }
 }
 

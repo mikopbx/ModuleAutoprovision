@@ -17,8 +17,9 @@ use MikoPBX\Core\System\Network;
 use MikoPBX\Core\System\Util;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionUsers;
+use Phalcon\Di;
 
-class Autoprovision
+class Autoprovision extends Di\Injectable
 {
 
     protected $tempDir;
