@@ -22,20 +22,18 @@ use MikoPBX\Core\Workers\WorkerBase;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 
-
 class WorkerProvisioningServerPnP extends WorkerBase
 {
-
-    private $url;
-    private $pbx_host;
-    private $interfaces;
-
-    private $pbx_version;
-    private $class_name = 'WorkerProvisioningServerPnP';
-    private $mac_white = [];
-    private $mac_black = [];
-    private $requests_dir;
-    private $debug;
+    public const BROAD_CAST_IP = '224.0.1.75';
+    private string $url;
+    private BeanstalkClient $client_queue;
+    private array $interfaces;
+    private string $pbx_version;
+    private string $class_name = 'WorkerProvisioningServerPnP';
+    private array $mac_white = [];
+    private array $mac_black = [];
+    private string $requests_dir;
+    private bool $debug;
 
     public function getSettings($debug = false):void
     {
@@ -49,7 +47,7 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $this->interfaces  = $network->getInterfacesNames();
 
         $protocol  = 'http';
-        $this->url = "{$protocol}://{$data->pbx_host}:{$http_port}/pbxcore/api/modules/ModuleAutoprovision";
+        $this->url = "$protocol://$data->pbx_host:$http_port/pbxcore/api/autoprovision";
 
         $re = '/\w{2}:?\w{2}:?\w{2}:?\w{2}:?\w{2}:?\w{2}/m';
         preg_match_all($re, strtolower(str_replace(':', '', $data->mac_white)), $this->mac_white, PREG_SET_ORDER);
@@ -61,12 +59,11 @@ class WorkerProvisioningServerPnP extends WorkerBase
         if (count($this->mac_black) > 0) {
             $this->mac_black = array_merge(...$this->mac_black);
         }
-
         $this->requests_dir = System::getLogDir() . '/' . $this->class_name . '/requests';
-        if ( ! file_exists($this->requests_dir) && ! mkdir($this->requests_dir, 0777, true) && ! is_dir(
-                $this->requests_dir
-            )) {
-            $this->requests_dir = null;
+        if ( !file_exists($this->requests_dir) &&
+             !mkdir($this->requests_dir, 0777, true) &&
+             !is_dir($this->requests_dir)) {
+            $this->requests_dir = '';
         }
     }
 
@@ -82,23 +79,22 @@ class WorkerProvisioningServerPnP extends WorkerBase
             Processes::processWorker('', '', __CLASS__, 'stop');
             return;
         }
-        $action = $argv[1] ?? '';
-
+        $action = $params[1]??'';
         // Общий воркер статует всегда все скрипты с компндой start
         if ($action === 'socket_server' || $action === 'start') {
             $this->client_queue = new BeanstalkClient();
             $this->client_queue->subscribe('ping_' . self::class, [$this, 'pingCallBack']);
             $this->listen();
         } elseif ($action === 'socket_client') {
-            $ip   = $argv[2] ?? '127.0.0.1';
-            $port = (integer)($argv[3] ?? 5062);
-            $mac  = str_replace(':', '', $argv[4] ?? '0015657322ff');
+            $ip   = $params[2] ?? '127.0.0.1';
+            $port = (integer)($params[3] ?? 5062);
+            $mac  = str_replace(':', '', $params[4] ?? '0015657322ff');
             self::testSocketClient($ip, $port, $mac);
         } elseif ($action === 'socket_client_notify') {
-            $ip_pbx     = $argv[2] ?? '127.0.0.1';
-            $port_pbx   = (integer)($argv[3] ?? 5060);
-            $ip_phone   = $argv[4] ?? '172.16.32.138';
-            $port_phone = (integer)($argv[5] ?? 5062);
+            $ip_pbx     = $params[2] ?? '127.0.0.1';
+            $port_pbx   = (integer)($params[3] ?? 5060);
+            $ip_phone   = $params[4] ?? '172.16.32.138';
+            $port_phone = (integer)($params[5] ?? 5062);
             self::socketClientNotify($ip_pbx, $port_pbx, $ip_phone, $port_phone);
         } elseif ($action === 'help') {
             echo "\n";
@@ -129,13 +125,13 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $resive_sock = @socket_create(AF_INET, SOCK_RAW, SOL_UDP);
         socket_bind($resive_sock, $ip, $port);
 
-        $msg = "SUBSCRIBE sip:MAC{$mac}@224.0.1.75 SIP/2.0\r\n" .
-            "Via: SIP/2.0/UDP {$ip}:{$port}.;branch=z9hG4bK42054260\r\n" .
-            "From: <sip:MAC{$mac}@224.0.1.75>;tag=42054258\r\n" .
-            "To: <sip:MAC{$mac}@224.0.1.75>\r\n" .
-            "Call-ID: 42054258@{$ip}\r\n" .
+        $msg = "SUBSCRIBE sip:MAC$mac@".self::BROAD_CAST_IP." SIP/2.0\r\n" .
+            "Via: SIP/2.0/UDP $ip:$port.;branch=z9hG4bK42054260\r\n" .
+            "From: <sip:MAC$mac@".self::BROAD_CAST_IP.">;tag=42054258\r\n" .
+            "To: <sip:MAC$mac@".self::BROAD_CAST_IP.">\r\n" .
+            "Call-ID: 42054258@$ip\r\n" .
             "CSeq: 1 SUBSCRIBE\r\n" .
-            "Contact: <sip:MAC{$mac}@{$ip}:{$port}>\r\n" .
+            "Contact: <sip:MAC$mac@$ip:$port>\r\n" .
             "Max-Forwards: 70\r\n" .
             "User-Agent: Yealink SIP-T21P 34.72.14.6\r\n" .
             "Expires: 0\r\n" .
@@ -158,7 +154,7 @@ class WorkerProvisioningServerPnP extends WorkerBase
         //*/
 
         $len = strlen($msg);
-        socket_sendto($sock, $msg, $len, 0, '224.0.1.75', 5060);
+        socket_sendto($sock, $msg, $len, 0, self::BROAD_CAST_IP, 5060);
         socket_close($sock);
 
         do {
@@ -173,7 +169,7 @@ class WorkerProvisioningServerPnP extends WorkerBase
                     continue;
                 }
 
-                echo "\n{$row_data}\n\n";
+                echo "\n$row_data\n\n";
                 $method = explode(' ', $rows[0])[0];
 
                 if ('NOTIFY' === $method) {
@@ -194,16 +190,16 @@ class WorkerProvisioningServerPnP extends WorkerBase
      */
     public static function socketClientNotify($ip_pbx, $port_pbx, $ip_phone, $port_phone): void
     {
-        $phone_user = 'autoprovision_user';
+        $phone_user = AutoprovisionConf::SIP_USER;
         $sock       = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
 
-        $msg = "NOTIFY sip:{$phone_user}@{$ip_phone}:{$port_phone};ob SIP/2.0\r\n" .
-            "Via: SIP/2.0/UDP {$ip_pbx}:{$port_pbx};branch=z9hG4bK12fd4e5c;rport\r\n" .
+        $msg = "NOTIFY sip:$phone_user@$ip_phone:$port_phone;ob SIP/2.0\r\n" .
+            "Via: SIP/2.0/UDP $ip_pbx:$port_pbx;branch=z9hG4bK12fd4e5c;rport\r\n" .
             "Max-Forwards: 70\r\n" .
-            "From: \"asterisk\" <sip:asterisk@{$ip_pbx}>;tag=as54cd2be9\r\n" .
-            "To: <sip:{$phone_user}@{$ip_phone}:{$port_phone};ob>\r\n" .
-            "Contact: <sip:asterisk@{$ip_pbx}:{$port_pbx}>\r\n" .
-            "Call-ID: 4afab6ce2bff0be11a4af41064340242@{$ip_pbx}:{$port_pbx}\r\n" .
+            "From: \"asterisk\" <sip:asterisk@$ip_pbx>;tag=as54cd2be9\r\n" .
+            "To: <sip:$phone_user@$ip_phone:$port_phone;ob>\r\n" .
+            "Contact: <sip:asterisk@$ip_pbx:$port_pbx>\r\n" .
+            "Call-ID: 4afab6ce2bff0be11a4af41064340242@$ip_pbx:$port_pbx\r\n" .
             "CSeq: 102 NOTIFY\r\n" .
             "User-Agent: mikopbx\r\n" .
             "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, SUBSCRIBE, NOTIFY, INFO, PUBLISH, MESSAGE\r\n" .
@@ -227,7 +223,7 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $sock = @socket_create(AF_INET, SOCK_RAW, SOL_UDP);
         if ($sock) {
             socket_set_option($sock, SOL_SOCKET, SO_REUSEADDR, 1);
-            $options = ['group' => '224.0.1.75'];
+            $options = ['group' => self::BROAD_CAST_IP];
             foreach ($this->interfaces as $eth) {
                 $options['interface'] = $eth;
                 socket_set_option($sock, IPPROTO_IP, MCAST_JOIN_GROUP, $options);
@@ -235,7 +231,7 @@ class WorkerProvisioningServerPnP extends WorkerBase
         } else {
             return false;
         }
-        $res = socket_bind($sock, '224.0.1.75', 5060);
+        $res = socket_bind($sock, self::BROAD_CAST_IP, 5060);
         if ( ! $res) {
             return false;
         }
@@ -253,10 +249,8 @@ class WorkerProvisioningServerPnP extends WorkerBase
                     $this->send_response($headers);
                 }
             }
-            $this->client_queue->wait(5); // instead of sleep
+            $this->client_queue->wait(); // instead of sleep
         } while (true);
-
-        return true;
     }
 
     /**
@@ -268,7 +262,7 @@ class WorkerProvisioningServerPnP extends WorkerBase
     {
         $this->verbose("\n $row_data \n");
         $rows = explode("\n", $row_data);
-        if (count($rows) === 0) {
+        if (empty($rows)){
             return [];
         }
         $method = explode(' ', $rows[0])[0];
@@ -306,7 +300,7 @@ class WorkerProvisioningServerPnP extends WorkerBase
             if ('Via' === $h_name) {
                 // Ищем строку вида 172.16.156.1:53582.
                 preg_match_all('/\d+.\d+.\d+.\d+:?\d*/m', $row, $matches, PREG_SET_ORDER);
-                if (count($matches) > 0 && count($matches[0]) === 1) {
+                if (!empty($matches) && count($matches[0]) === 1) {
                     $res                   = explode(':', $matches[0][0]);
                     $headers['phone_ip']   = $res[0];
                     $headers['phone_port'] = $res[1];
@@ -328,19 +322,17 @@ class WorkerProvisioningServerPnP extends WorkerBase
                     $event_data[$arr_param[0]] = str_replace('"', '', $arr_param[1]);
                 }
                 $headers[$h_name]         = $event_data;
-                $headers["OLD_{$h_name}"] = $row;
+                $headers["OLD_$h_name"] = $row;
             } elseif ('To' === $h_name) {
                 $headers[$h_name] = $row;
             }
         }
-
         // Наполним таблицу ARP.
         exec("timeout -t 1 ping {$headers['phone_ip']} -c 1 ");
         // Анализируем MAC адрес устройства.
         exec("busybox arp -D {$headers['phone_ip']} -n | /bin/busybox awk  '{ print $4 }' 2>&1", $out);
         $real_mac = $out[0] ?? '';
         $real_mac = str_replace(':', '', $real_mac);
-
         if ($real_mac !== $headers['mac']) {
             Util::sysLogMsg(
                 $this->class_name,
@@ -348,17 +340,18 @@ class WorkerProvisioningServerPnP extends WorkerBase
                 LOG_NOTICE
             );
         }
-
         if ( ! empty($headers['mac']) && ! empty($headers['phone_ip'])) {
             Util::sysLogMsg(
                 $this->class_name,
                 "Request provisiong from ip: {$headers['phone_ip']}; phone: {$headers['Event']['vendor']} {$headers['Event']['model']}; mac=" . $real_mac,
                 LOG_NOTICE
             );
-            file_put_contents(
-                $this->requests_dir . '/' . $headers['mac'],
-                json_encode($headers, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-            );
+            try {
+                $data = json_encode($headers, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            }catch (\Exception $e){
+                $data = [];
+            }
+            file_put_contents($this->requests_dir . '/' . $headers['mac'], $data);
         }
 
         if ( ! empty($headers['mac']) && ! empty($headers['phone_ip'])) {
@@ -423,8 +416,8 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $this->sendToHost($sock, $headers['phone_ip'], (int)$headers['phone_port'], $msg);
         $this->verbose("\n" . $msg);
 
-        $url = "{$this->url}/getcfg?mac={$headers['mac']}&" . http_build_query($headers['Event']);
-        $url .= '&solt=' . md5($headers['mac'] . getmypid());
+        $provisionUrl = "$this->url/getcfg?mac={$headers['mac']}&" . http_build_query($headers['Event']);
+        $provisionUrl .= '&solt=' . md5($headers['mac'] . getmypid());
 
         $msg = "NOTIFY sip:{$headers['phone_ip']}:{$headers['phone_port']} SIP/2.0\r\n" .
             "{$headers['Via']}\r\n" .
@@ -436,10 +429,10 @@ class WorkerProvisioningServerPnP extends WorkerBase
             "CSeq: 3 NOTIFY\r\n" .
             "Content-Type: application/url\r\n" .
             "Subscription-State: terminated;reason=timeout\r\n" .
-            "Event: ua-profile;profile-type=\"device\";vendor=\"MIKO\";model=\"{$this->class_name}\";version=\"{$this->pbx_version}\"\r\n" .
-            'Content-Length: ' . strlen($url) . "\r\n" .
+            "Event: ua-profile;profile-type=\"device\";vendor=\"MIKO\";model=\"$this->class_name\";version=\"$this->pbx_version\"\r\n" .
+            'Content-Length: ' . strlen($provisionUrl) . "\r\n" .
             "\r\n" .
-            $url;
+            $provisionUrl;
 
         $this->verbose("\n" . $msg);
         $this->sendToHost($sock, $headers['phone_ip'], (int)$headers['phone_port'], $msg);

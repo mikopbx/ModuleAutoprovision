@@ -8,8 +8,6 @@
  */
 
 namespace Modules\ModuleAutoprovision\Lib;
-
-
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 
 class AutoprovisionYealink extends Autoprovision implements ConfManager
@@ -38,7 +36,7 @@ class AutoprovisionYealink extends Autoprovision implements ConfManager
             // Enable or disable the account1, 0-Disabled (default), 1-Enabled;
             $cfg .= "account.{$line}.enable = 1\r\n";
             // Configure the label displayed on the LCD screen for account1.
-            $cfg .= "account.{$line}.label = Askozia ({$sip_peer['extension']})\r\n";
+            $cfg .= "account.{$line}.label = MikoPBX ({$sip_peer['extension']})\r\n";
             // Configure the display name of account1.
             $cfg .= "account.{$line}.display_name = {$sip_peer['callerid']}\r\n";
             // Configure the username and password for register authentication.
