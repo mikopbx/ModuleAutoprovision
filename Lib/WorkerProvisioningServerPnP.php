@@ -481,4 +481,3 @@ if (isset($argv) && count($argv) > 1) {
         Util::sysLogMsg("{$workerClassname}_EXCEPTION", $e->getMessage(), LOG_ERR);
     }
 }
-
