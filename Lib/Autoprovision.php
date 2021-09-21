@@ -8,7 +8,6 @@
 
 namespace Modules\ModuleAutoprovision\Lib;
 
-
 use MikoPBX\Common\Models\Extensions;
 use MikoPBX\Common\Models\Sip;
 use MikoPBX\Core\Asterisk\AGI;
@@ -59,7 +58,7 @@ class Autoprovision extends Di\Injectable
                 }
             }
         }
-        if (count($sip_data) === 0) {
+        if (empty($sip_data)) {
             $def_peer      = [
                 'extension' => AutoprovisionConf::SIP_USER,
                 'secret'    => AutoprovisionConf::SIP_SECRET,
@@ -99,18 +98,16 @@ class Autoprovision extends Di\Injectable
      * @param $ip_phone
      * @param $port_phone
      * @param $eth
-     * @param $manufacturer_model
      */
-    public function clientNotifyReboot($ip_phone, $port_phone, $eth, $manufacturer_model): void
+    public function clientNotifyReboot($ip_phone, $port_phone, $eth): void
     {
-        // if( stripos($manufacturer_model, 'yealink') !== false || stripos($manufacturer_model, 'yealink') !== false){
         $sock = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
 
         $net        = new Network();
         $eth        = $net->getInterface($eth);
         $ip_pbx     = $eth['ipaddr'];
         $port_pbx   = $this->mikoPBXConfig->getGeneralSettings('SIPPort');
-        $phone_user = 'autoprovision_user';
+        $phone_user = AutoprovisionConf::SIP_USER;
 
         $msg = "NOTIFY sip:{$phone_user}@{$ip_phone}:{$port_phone};ob SIP/2.0\r\n" .
             "Via: SIP/2.0/UDP {$ip_pbx}:{$port_pbx};branch=z9hG4bK12fd4e5c;rport\r\n" .
@@ -130,8 +127,6 @@ class Autoprovision extends Di\Injectable
         $len = strlen($msg);
         socket_sendto($sock, $msg, $len, 0, $ip_phone, $port_phone);
         socket_close($sock);
-        // }
-        $manufacturer_model = null;
     }
 
     /**
@@ -142,7 +137,7 @@ class Autoprovision extends Di\Injectable
         $agi = new AGI();
         $row = $agi->get_variable('PT1C_VIA', true);
         preg_match_all('/\d+.\d+.\d+.\d+:?\d*/m', $row, $matches, PREG_SET_ORDER);
-        if (count($matches) > 0 && count($matches[0]) === 1) {
+        if (!empty($matches) && count($matches[0]) === 1) {
             $res = explode(':', $matches[0][0]);
             [$ip, $port] = $res;
 
@@ -153,8 +148,6 @@ class Autoprovision extends Di\Injectable
             $exten = Extensions::findFirst("number='{$sip_id}'");
             if ($exten === null) {
                 $agi->set_variable('PROVISION_STATUS', 'EXTEN_NOT_FOUND');
-
-                // TODO ОШИБКА // exten не существует. Записать в syslog. Обработать fail2ban.
                 return;
             }
 
@@ -207,9 +200,8 @@ class Autoprovision extends Di\Injectable
                 $agi->set_variable('PROVISION_STATUS', 'OK');
 
                 // Тут все ОК, нужно перезагрузить телефон.
-                $this->clientNotifyReboot($ip, $port, $eth, $phone_data->manufacturer_model);
+                $this->clientNotifyReboot($ip, $port, $eth);
             } else {
-                // TODO ОШИБКА // Телефон не был зарегистрирован на АТС. Его нет в ModuleAutoprovision.
                 // Записать в syslog. Обработать fail2ban.
                 $agi->set_variable('PROVISION_STATUS', 'PHONE_NOT_FOUND');
             }

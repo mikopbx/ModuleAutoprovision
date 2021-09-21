@@ -8,28 +8,31 @@
 
 namespace Modules\ModuleAutoprovision\Lib;
 
+use MikoPBX\Core\Workers\Cron\WorkerSafeScriptsCore;
 use MikoPBX\Modules\Config\ConfigClass;
 use MikoPBX\PBXCoreREST\Lib\PBXApiResult;
+use Modules\ModuleAutoprovision\Lib\RestAPI\Controllers\GetController;
 use MikoPBX\Core\System\{PBX, Processes, System, Util};
 use Modules\ModuleAutoprovision\Models\{ModuleAutoprovision};
 
 class AutoprovisionConf extends ConfigClass
 {
-    public const SIP_USER = 'apv_askozia';
-    public const SIP_SECRET = 'apv_askozia_secret';
-
-    private $sip_user;
-    private $sip_secret;
+    public const SIP_USER   = 'apv-miko-pbx';
+    public const SIP_SECRET = 'apv-miko-pbx';
 
     /**
-     * Настройки для текущего класса.
+     * Returns module workers to start it at WorkerSafeScript
+     * @return array
      */
-    public function getSettings(): void
+    public function getModuleWorkers(): array
     {
-        $this->sip_user = self::SIP_USER;
-        $this->sip_secret = self::SIP_SECRET;
+        return [
+            [
+                'type'           => WorkerSafeScriptsCore::CHECK_BY_PID_NOT_ALERT,
+                'worker'         => WorkerProvisioningServerPnP::class,
+            ],
+        ];
     }
-
 
     /**
      *  Process CoreAPI requests under root rights
@@ -37,31 +40,30 @@ class AutoprovisionConf extends ConfigClass
      * @param array $request
      *
      * @return PBXApiResult
-     * @throws \Exception
      */
     public function moduleRestAPICallback(array $request): PBXApiResult
     {
         $res = new PBXApiResult();
         $res->processor = __METHOD__;
-        $res->success = false;
-        $res->data = $request;
 
-        $filename    = '';
-        $need_delete = false;
-        $action = strtoupper($request['action']);
-        switch ($action){
-            case 'GETCFG':
-                $autoprovision = new Autoprovision();
-                $filename    = $autoprovision->generateConfigPhone($request);
-                $need_delete = true;
-                break;
-            case 'GETIMG':
-                $filename = "{$this->moduleDir}/assets/img/{$request['file']}";
-                break;
-            default:
-                $res->success = false;
-                $res->messages[] = 'API action not found in moduleRestAPICallback ModuleAutoprovision;';
+        $action = $request['action']??'';
+        $data   = $request['data']??[];
+        if(method_exists($this, $action)){
+            $res = $this->$action($data);
+        }else{
+            $res->success = false;
+            $res->data = $request;
         }
+        return $res;
+    }
+
+    public function getProvisionConfig($request):PBXApiResult{
+        /** @var PBXApiResult $res */
+        $res = new PBXApiResult();
+
+        $autoprovision = new Autoprovision();
+        $filename    = $autoprovision->generateConfigPhone($request);
+        $need_delete = true;
         if (file_exists($filename)) {
             $res->success = true;
             $res->data = [
@@ -71,6 +73,36 @@ class AutoprovisionConf extends ConfigClass
             ];
         }
         return $res;
+    }
+    public function getImgFile($request):PBXApiResult{
+        $res = new PBXApiResult();
+        $filename = "$this->moduleDir/assets/img/{$request['file']}";
+        if (file_exists($filename)) {
+            $res->success = true;
+            $res->data = [
+                'filename'    => $filename,
+                'fpassthru'   => true,
+                'need_delete' => false,
+            ];
+        }
+        return $res;
+    }
+
+    /**
+     * Returns array of additional routes for PBXCoreREST interface from module
+     *
+     * [ControllerClass, ActionMethod, RequestTemplate, HttpMethod, RootUrl, NoAuth ]
+     *
+     * @return array
+     * @example
+     *  [[GetController::class, 'callAction', '/pbxcore/api/backup/{actionName}', 'get', '/', false],
+     */
+    public function getPBXCoreRESTAdditionalRoutes(): array
+    {
+        return [
+            [GetController::class, 'getConfig', '/pbxcore/api/autoprovision/getcfg', 'get', '/', true],
+            [GetController::class, 'getImg', '/pbxcore/api/autoprovision/getimg', 'get', '/', true],
+        ];
     }
 
     /**
@@ -86,10 +118,10 @@ class AutoprovisionConf extends ConfigClass
 
         $options = [
             'type'     => 'auth',
-            'username' => $this->sip_user,
-            'password' => $this->sip_secret,
+            'username' => self::SIP_USER,
+            'password' => self::SIP_SECRET,
         ];
-        $conf    .= "[{$this->sip_user}] \n";
+        $conf    .= "[".self::SIP_USER."] \n";
         $conf    .= Util::overrideConfigurationArray($options, null, 'auth');
 
         $options = [
@@ -98,7 +130,7 @@ class AutoprovisionConf extends ConfigClass
             'qualify_timeout'   => '5',
             'max_contacts'      => '100',
         ];
-        $conf    .= "[{$this->sip_user}] \n";
+        $conf    .= "[".self::SIP_USER."] \n";
         $conf    .= Util::overrideConfigurationArray($options, null, 'aor');
 
         $options = [
@@ -112,20 +144,19 @@ class AutoprovisionConf extends ConfigClass
             'rewrite_contact'      => 'yes',
             'ice_support'          => 'yes',
             'direct_media'         => 'no',
-            'callerid'             => "{$this->sip_user} <{$this->sip_user}>",
+            'callerid'             => self::SIP_USER." <".self::SIP_USER.">",
             'language'             => $lang,
             'device_state_busy_at' => 1,
-            'aors'                 => $this->sip_user,
-            'auth'                 => $this->sip_user,
-            'outbound_auth'        => $this->sip_user,
+            'aors'                 => self::SIP_USER,
+            'auth'                 => self::SIP_USER,
+            'outbound_auth'        => self::SIP_USER,
         ];
         // ---------------- //
-        $conf .= "[{$this->sip_user}] \n";
+        $conf .= "[".self::SIP_USER."] \n";
         $conf .= Util::overrideConfigurationArray($options, null, 'endpoint');
 
         return $conf;
     }
-
 
     /**
      * Подключаем контекст настройки телефона.
@@ -149,31 +180,12 @@ class AutoprovisionConf extends ConfigClass
         if ($settings === null) {
             return '';
         }
-        $exten = $settings->extension;
-
-        $ext_conf = "\n[autoprovision-internal]\n";
+        $ext_conf = PHP_EOL."[autoprovision-internal]".PHP_EOL;
         // Настройка телефона на конкретный exten.
-        $ext_conf .= "exten => _{$exten}!,1,NoOp(Try autoprovision) \n\t";
-        $ext_conf .= 'same => n,Set(PT1C_VIA=${PJSIP_HEADER(read,Via,1)})' . "\n";
-        $ext_conf .= "same => n,AGI({$this->moduleDir}/agi-bin/ModuleAutoprovisionAGI.php)\n";
-
+        $ext_conf .= "exten => _$settings->extension!,1,NoOp(Try autoprovision)".PHP_EOL."\t";
+        $ext_conf .= 'same => n,Set(PT1C_VIA=${PJSIP_HEADER(read,Via,1)})'.PHP_EOL;
+        $ext_conf .= "same => n,AGI($this->moduleDir/agi-bin/ModuleAutoprovisionAGI.php)".PHP_EOL;
         return $ext_conf;
-    }
-
-
-    /**
-     * Добавление задач в crond.
-     *
-     * @param $tasks
-     */
-    public function createCronTasks(&$tasks): void
-    {
-        if ( ! is_array($tasks)) {
-            return;
-        }
-        $workerPath = Util::getFilePathByClassName(WorkerProvisioningServerPnP::class);
-        $phpPath = Util::which('php');
-        $tasks[]      = "*/1 * * * * {$phpPath} -f {$workerPath} > /dev/null 2> /dev/null\n";
     }
 
     /**
@@ -187,8 +199,7 @@ class AutoprovisionConf extends ConfigClass
         PBX::sipReload();
         System::invokeActions(['cron' => 0]);
         $workerPath = Util::getFilePathByClassName(WorkerProvisioningServerPnP::class);
-        $phpPath = Util::which('php');
-        Processes::mwExec("{$phpPath} -f {$workerPath}");
+        $phpPath    = Util::which('php');
+        Processes::mwExec("$phpPath -f $workerPath");
     }
-
 }
