@@ -14,5 +14,5 @@ return [
  * Proprietary and confidential
  * Written by Alexey Portnov, 10 2019
  */
-    'repModuleAutoprovision' => 'Modul -% repesent%',
+    'repModuleAutoprovision' => 'Modul -%repesent%',
 ];
