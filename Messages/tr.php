@@ -15,4 +15,10 @@ return [
  */
     'repModuleAutoprovision' => 'Modül -% tekrarlama%',
     'mo_ModuleAutoprovision' => 'Otomatik telefon kurulum modülü',
+    'mod_Autoprovision_header' => 'Modül etkinleştirilirse "<b>apv-miko-pbx</b>" SIP hesabı PBX\'te kullanılabilir hale gelir.
+<br>Telefonunuzu otomatik olarak yapılandırmak için fabrika ayarlarına sıfırlamanız gerekir.
+<br>Telefon PBX\'e ilk kez bağlanıyorsa "<b>apv-miko-pbx</b>" hesabına kaydedilecektir.
+<br>Telefonu yapılandırmak için "<b>%extension%</b>" telefonunu aramanız gerekir; burada XXX, PBX\'teki dahili numaradır.
+<br><br>
+Otomatik yapılandırma yalnızca işletmenin yerel ağı için, <b>Yealink, Snom, Fanvil</b> telefonları için mümkündür.',
 ];
