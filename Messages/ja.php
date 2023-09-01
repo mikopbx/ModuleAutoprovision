@@ -15,4 +15,10 @@ return [
     'mod_Autoprovision_mac_black' => '電話のMACアドレスのブラックリスト',
     'mod_Autoprovision_pbx_host' => '電話登録用のサーバーアドレス',
     'BreadcrumbModuleAutoprovision' => '自動電話セットアップモジュール',
+    'mod_Autoprovision_header' => 'モジュールが有効になっている場合、SIP アカウント「<b>apv-miko-pbx</b>」が PBX で使用できるようになります。
+<br>携帯電話を自動的に設定するには、携帯電話を工場出荷時の設定にリセットする必要があります。
+<br>電話機が初めて PBX に接続すると、「<b>apv-miko-pbx</b>」アカウントに登録されます。
+<br>電話を設定するには、そこから「<b>%extension%</b>」に電話する必要があります。XXX は PBX の内部番号です。
+<br><br>
+自動構成は、企業のローカル ネットワーク、電話機<b>Yealink、Snom、Fanvil</b> でのみ可能です。',
 ];
