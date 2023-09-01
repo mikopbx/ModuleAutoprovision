@@ -15,4 +15,10 @@ return [
     'repModuleAutoprovision' => 'Modul - % repræsenterer %',
     'mod_Autoprovision_pbx_host' => 'Serveradresse til telefonregistrering',
     'SubHeaderModuleAutoprovision' => 'Hjælp til opsætning af SIP-telefoner',
+    'mod_Autoprovision_header' => 'Hvis modulet er aktiveret, bliver SIP-kontoen "<b>apv-miko-pbx</b>" tilgængelig på PBX\'en.
+<br>For automatisk at konfigurere din telefon skal du nulstille den til fabriksindstillingerne.
+<br>Hvis telefonen opretter forbindelse til PBX\'en for første gang, vil den blive registreret på "<b>apv-miko-pbx</b>"-kontoen.
+<br>For at konfigurere telefonen skal du ringe til "<b>%extension%</b>" fra den, hvor XXX er det interne nummer på PBX\'en.
+<br><br>
+Autokonfiguration er kun mulig for virksomhedens lokale netværk, for telefoner <b>Yealink, Snom, Fanvil</b>.',
 ];
