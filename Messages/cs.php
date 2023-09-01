@@ -15,4 +15,10 @@ return [
     'SubHeaderModuleAutoprovision' => 'Pomoc s nastavením SIP telefonů',
     'BreadcrumbModuleAutoprovision' => 'Modul automatického nastavení telefonu',
     'mod_Autoprovision_additional_params' => 'Další možnosti',
+    'mod_Autoprovision_header' => 'Pokud je modul povolen, zpřístupní se na ústředně SIP účet "<b>apv-miko-pbx</b>".
+<br>Chcete-li telefon automaticky nakonfigurovat, musíte jej resetovat do továrního nastavení.
+<br>Pokud se telefon připojí k ústředně poprvé, bude zaregistrován k účtu "<b>apv-miko-pbx</b>".
+<br>Pro konfiguraci telefonu z něj musíte zavolat na "<b>%extension%</b>", kde XXX je interní číslo ústředny.
+<br><br>
+Automatická konfigurace je možná pouze pro lokální síť podniku, pro telefony <b>Yealink, Snom, Fanvil</b>.',
 ];
