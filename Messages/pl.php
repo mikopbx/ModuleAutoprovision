@@ -15,4 +15,10 @@ return [
  * Written by Alexey Portnov, 10 2019
  */
     'repModuleAutoprovision' => 'Moduł -% reprezentatywnych%',
+    'mod_Autoprovision_header' => 'Jeżeli moduł jest włączony, w centrali staje się dostępne konto SIP „<b>apv-miko-pbx</b>”.
+<br>Aby automatycznie skonfigurować telefon, musisz zresetować go do ustawień fabrycznych.
+<br>Jeśli telefon połączy się z centralą po raz pierwszy, zostanie zarejestrowany na koncie „<b>apv-miko-pbx</b>”.
+<br>Aby skonfigurować telefon należy wywołać z niego "<b>%extension%</b>", gdzie XXX to numer wewnętrzny centrali.
+<br><br>
+Autokonfiguracja możliwa jest tylko dla sieci lokalnej przedsiębiorstwa, dla telefonów <b>Yealink, Snom, Fanvil</b>.',
 ];
