@@ -1,11 +1,6 @@
 
 <div class="ui message ">
-Если модуль включен, то на АТС становится доступна учетная запись SIP "<b>apv-miko-pbx</b>".
-<br>Для автоматической настройки телефона необходимо сбросить его к заводским настройками.
-<br>Если телефон подключается к АТС впервые, то он будет зарегистрирован на учетной записи "<b>apv-miko-pbx</b>".
-<br>Для настройки телефона необходимо с него позвонить на номер "<b>{{ form.getValue('extension') }}</b>", где XXX - это внутренний номер на АТС.
-<br><br>
-Автонастройка возможна только для локальной сети предприятия, для телефонов <b>Yealink, Snom, Fanvil</b>.
+    {{ t._('mod_Autoprovision_header',['extension':form.getValue('extension')]) }}
 </div>
 
 <form class="ui large grey segment form" id="module-autoprovision-form">

@@ -15,4 +15,10 @@ return [
  * Written by Alexey Portnov, 10 2019
  */
     'repModuleAutoprovision' => 'Module -% représentant%',
+    'mod_Autoprovision_header' => 'Si le module est activé, le compte SIP "<b>apv-miko-pbx</b>" devient disponible sur le PBX.
+<br>Pour configurer automatiquement votre téléphone, vous devez le réinitialiser aux paramètres d\'usine.
+<br>Si le téléphone se connecte au PBX pour la première fois, il sera enregistré sur le compte "<b>apv-miko-pbx</b>".
+<br>Pour configurer le téléphone, vous devez appeler "<b>%extension%</b>" depuis celui-ci, où XXX est le numéro interne du PBX.
+<br><br>
+L\'autoconfiguration n\'est possible que pour le réseau local de l\'entreprise, pour les téléphones <b>Yealink, Snom, Fanvil</b>.',
 ];

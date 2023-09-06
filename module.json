@@ -3,5 +3,5 @@
   "moduleUniqueID":"ModuleAutoprovision",
   "support_email": "help@miko.ru",
   "version": "%ModuleVersion%",
-  "min_pbx_version": "2021.3.5"
+  "min_pbx_version": "2023.2.168"
 }
