@@ -11,6 +11,7 @@ namespace Modules\ModuleAutoprovision\Lib;
 
 require_once 'Globals.php';
 
+use MikoPBX\Common\Handlers\CriticalErrorsHandler;
 use MikoPBX\Common\Models\PbxExtensionModules;
 use MikoPBX\Core\System\BeanstalkClient;
 use MikoPBX\Core\System\MikoPBXConfig;
@@ -476,8 +477,6 @@ if (isset($argv) && count($argv) > 1) {
         $worker = new $workerClassname();
         $worker->start($argv);
     } catch (\Throwable $e) {
-        global $errorLogger;
-        $errorLogger->captureException($e);
-        Util::sysLogMsg("{$workerClassname}_EXCEPTION", $e->getMessage(), LOG_ERR);
+        CriticalErrorsHandler::handleExceptionWithSyslog($e);
     }
 }
