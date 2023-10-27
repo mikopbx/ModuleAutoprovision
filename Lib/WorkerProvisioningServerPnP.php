@@ -70,9 +70,9 @@ class WorkerProvisioningServerPnP extends WorkerBase
 
     /**
      * Worker Entry point
-     * @param mixed $params
+     * @param mixed $argv
      */
-    public function start($params): void
+    public function start($argv): void
     {
         $this->getSettings();
         $result = PbxExtensionModules::findFirstByUniqid("ModuleAutoprovision");
@@ -80,22 +80,22 @@ class WorkerProvisioningServerPnP extends WorkerBase
             Processes::processWorker('', '', __CLASS__, 'stop');
             return;
         }
-        $action = $params[1]??'';
+        $action = $argv[1]??'';
         // Общий воркер статует всегда все скрипты с компндой start
         if ($action === 'socket_server' || $action === 'start') {
             $this->client_queue = new BeanstalkClient();
             $this->client_queue->subscribe('ping_' . self::class, [$this, 'pingCallBack']);
             $this->listen();
         } elseif ($action === 'socket_client') {
-            $ip   = $params[2] ?? '127.0.0.1';
-            $port = (integer)($params[3] ?? 5062);
-            $mac  = str_replace(':', '', $params[4] ?? '0015657322ff');
+            $ip   = $argv[2] ?? '127.0.0.1';
+            $port = (integer)($argv[3] ?? 5062);
+            $mac  = str_replace(':', '', $argv[4] ?? '0015657322ff');
             self::testSocketClient($ip, $port, $mac);
         } elseif ($action === 'socket_client_notify') {
-            $ip_pbx     = $params[2] ?? '127.0.0.1';
-            $port_pbx   = (integer)($params[3] ?? 5060);
-            $ip_phone   = $params[4] ?? '172.16.32.138';
-            $port_phone = (integer)($params[5] ?? 5062);
+            $ip_pbx     = $argv[2] ?? '127.0.0.1';
+            $port_pbx   = (integer)($argv[3] ?? 5060);
+            $ip_phone   = $argv[4] ?? '172.16.32.138';
+            $port_phone = (integer)($argv[5] ?? 5062);
             self::socketClientNotify($ip_pbx, $port_pbx, $ip_phone, $port_phone);
         } elseif ($action === 'help') {
             echo "\n";
