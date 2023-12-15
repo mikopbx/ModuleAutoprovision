@@ -1,5 +1,11 @@
 "use strict";
 
+function _createForOfIteratorHelper(o, allowArrayLike) { var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"]; if (!it) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e) { throw _e; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = it.call(o); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e2) { didErr = true; err = _e2; }, f: function f() { try { if (!normalCompletion && it["return"] != null) it["return"](); } finally { if (didErr) throw err; } } }; }
+
+function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+
+function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
+
 /*
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
@@ -8,74 +14,228 @@
  */
 
 /* global globalRootUrl,Config, Form */
+var idUrl = 'module-autoprovision';
 var moduleAutoprovision = {
   $formObj: $('#module-autoprovision-form'),
-  initialize: function () {
-    function initialize() {
-      // Динамическая проверка свободен ли внутренний номер
-      moduleAutoprovision.initializeForm();
-    }
+  initialize: function initialize() {
+    // Динамическая проверка свободен ли внутренний номер
+    moduleAutoprovision.initializeForm();
+    moduleAutoprovision.initInputElements();
+    var body = $('body');
+    body.on('click', '#add-new-template-button', function (e) {
+      var id = 'none_' + Date.now();
+      var newRow = $('<tr>').attr('id', id);
+      var data = $('#templates #emptyTemplateRow').html();
+      newRow.html(data.replace(/emptyTemplateRow/g, id));
+      $('#templates tbody').append(newRow); // Новые элементы нужно инициализировать на форме
 
-    return initialize;
-  }(),
+      moduleAutoprovision.initInputElements();
+      moduleAutoprovision.$formObj.form();
+      Form.setEvents();
+    });
+    body.on('click', '#add-new-phone_settings-button', function (e) {
+      var id = 'none_' + Date.now();
+      var newRow = $('<tr>').attr('id', id);
+      var data = $('#phone_settings #emptyTemplateRow').html();
+      newRow.html(data.replace(/emptyTemplateRow/g, id));
+      $('#phone_settings tbody').append(newRow); // Новые элементы нужно инициализировать на форме
+
+      moduleAutoprovision.initInputElements();
+      moduleAutoprovision.$formObj.form();
+      Form.setEvents();
+    });
+    body.on('click', '#add-new-templates_uri-button', function (e) {
+      var id = 'none_' + Date.now();
+      var newRow = $('<tr>').attr('id', id);
+      var data = $('#templates_uri #emptyTemplateRow').html();
+      newRow.html(data.replace(/emptyTemplateRow/g, id));
+      $('#templates_uri tbody').append(newRow); // Новые элементы нужно инициализировать на форме
+
+      moduleAutoprovision.initInputElements();
+      moduleAutoprovision.$formObj.form();
+      Form.setEvents();
+    });
+    body.on('click', '#add-new-other_pbx-button', function (e) {
+      var id = 'none_' + Date.now();
+      var newRow = $('<tr>').attr('id', id);
+      var data = $('#other_pbx #emptyTemplateRow').html();
+      newRow.html(data.replace(/emptyTemplateRow/g, id));
+      $('#other_pbx tbody').append(newRow); // Новые элементы нужно инициализировать на форме
+
+      moduleAutoprovision.initInputElements();
+      moduleAutoprovision.$formObj.form();
+      Form.setEvents();
+    });
+  },
+  initInputElements: function initInputElements() {
+    $('.menu .item').tab();
+    $('div.dropdown').dropdown();
+    $('input, textarea').change(function () {
+      $(this).attr('value', $(this).val());
+    });
+  },
 
   /**
       * Применение настроек модуля после изменения данных формы
       */
-  applyConfigurationChanges: function () {
-    function applyConfigurationChanges() {
-      $.api({
-        url: "".concat(Config.pbxUrl, "/pbxcore/api/modules/ModuleAutoprovision/reload"),
-        on: 'now',
-        successTest: function () {
-          function successTest(response) {
-            // test whether a JSON response is valid
-            return Object.keys(response).length > 0 && response.result === true;
-          }
+  applyConfigurationChanges: function applyConfigurationChanges() {
+    $.api({
+      url: "".concat(Config.pbxUrl, "/pbxcore/api/modules/ModuleAutoprovision/reload"),
+      on: 'now',
+      successTest: function successTest(response) {
+        return Object.keys(response).length > 0 && response.result === true;
+      },
+      onSuccess: function onSuccess() {// moduleAutoprovision.testConnection();
+      }
+    });
+  },
+  cbBeforeSendForm: function cbBeforeSendForm(settings) {
+    var result = settings;
+    result.data = moduleAutoprovision.$formObj.form('get values');
+    return result;
+  },
+  cbAfterSendForm: function cbAfterSendForm(response) {
+    for (var table in response.resultSaveTables) {
+      for (var key in response.resultSaveTables[table]) {
+        var syncTr = $("#".concat(table, " tr#").concat(key));
+        var html = syncTr.html();
+        syncTr.html(html.replace(new RegExp(key, "g"), response.resultSaveTables[table][key]));
+        syncTr.attr('id', response.resultSaveTables[table][key]);
+        $(".ui.modal[data-id=\"".concat(key, "\"][data-id-table=\"").concat(table, "\"]")).attr('data-id', response.resultSaveTables[table][key]);
+      }
+    }
 
-          return successTest;
-        }(),
-        onSuccess: function () {
-          function onSuccess() {// moduleAutoprovision.testConnection();
-          }
-
-          return onSuccess;
-        }()
+    var templates = [];
+    $('#templates td[data-label="name"]').each(function (index, item) {
+      templates.push({
+        id: $(item).parent().attr('id'),
+        name: $(item).find('input').val()
       });
+    });
+    $('td[data-label="template"] div.scrolling.menu').each(function (index, item) {
+      $(item).empty();
+
+      var _iterator = _createForOfIteratorHelper(templates),
+          _step;
+
+      try {
+        for (_iterator.s(); !(_step = _iterator.n()).done;) {
+          var element = _step.value;
+          var newRow = $('<div>').attr('data-value', element.id).attr('class', 'item').text(element.name);
+          $(item).append(newRow);
+        }
+      } catch (err) {
+        _iterator.e(err);
+      } finally {
+        _iterator.f();
+      }
+    });
+    moduleAutoprovision.initInputElements();
+    moduleAutoprovision.applyConfigurationChanges();
+    moduleAutoprovision.$formObj.form();
+    Form.setEvents();
+  },
+  initializeForm: function initializeForm() {
+    Form.$formObj = moduleAutoprovision.$formObj;
+    Form.url = "".concat(globalRootUrl, "module-autoprovision/save");
+    Form.cbBeforeSendForm = moduleAutoprovision.cbBeforeSendForm;
+    Form.cbAfterSendForm = moduleAutoprovision.cbAfterSendForm;
+    Form.initialize();
+  },
+  showTemplateOptions: function showTemplateOptions(id) {
+    $('.ui.modal[data-id="' + id + '"][data-id-table="templates"]').modal({
+      closable: true,
+      onApprove: function onApprove() {
+        var value = $(this).find("textarea").val();
+        var resEl = $('textarea[name="templates-template-' + $(this).attr('data-id') + '"]');
+        resEl.val(value);
+        Form.checkValues();
+        return true;
+      }
+    }).modal('show');
+  },
+  removeTemplate: function removeTemplate(id, button) {
+    if (!$(button).find('i').hasClass('close')) {
+      return;
     }
 
-    return applyConfigurationChanges;
-  }(),
-  cbBeforeSendForm: function () {
-    function cbBeforeSendForm(settings) {
-      var result = settings;
-      result.data = moduleAutoprovision.$formObj.form('get values');
-      return result;
+    $.ajax({
+      type: "POST",
+      url: globalRootUrl + idUrl + "/delete",
+      data: {
+        table: 'Templates',
+        id: id
+      },
+      success: function success(response) {
+        $('#templates tr[id="' + id + '"]').remove();
+      },
+      error: function error(xhr, status, _error) {
+        console.debug("Ошибка запроса", status, _error);
+      }
+    });
+  },
+  removeUserTemplate: function removeUserTemplate(id, button) {
+    if (!$(button).find('i').hasClass('close')) {
+      return;
     }
 
-    return cbBeforeSendForm;
-  }(),
-  cbAfterSendForm: function () {
-    function cbAfterSendForm() {
-      moduleAutoprovision.applyConfigurationChanges();
+    $.ajax({
+      type: "POST",
+      url: globalRootUrl + idUrl + "/delete",
+      data: {
+        table: 'TemplatesUsers',
+        id: id
+      },
+      success: function success(response) {
+        $('#phone_settings tr[id="' + id + '"]').remove();
+      },
+      error: function error(xhr, status, _error2) {
+        console.debug("Ошибка запроса", status, _error2);
+      }
+    });
+  },
+  removeUriTemplate: function removeUriTemplate(id, button) {
+    if (!$(button).find('i').hasClass('close')) {
+      return;
     }
 
-    return cbAfterSendForm;
-  }(),
-  initializeForm: function () {
-    function initializeForm() {
-      Form.$formObj = moduleAutoprovision.$formObj;
-      Form.url = "".concat(globalRootUrl, "module-autoprovision/save"); // Form.validateRules = moduleAutoprovision.validateRules;
-
-      Form.cbBeforeSendForm = moduleAutoprovision.cbBeforeSendForm;
-      Form.cbAfterSendForm = moduleAutoprovision.cbAfterSendForm;
-      Form.initialize();
+    $.ajax({
+      type: "POST",
+      url: globalRootUrl + idUrl + "/delete",
+      data: {
+        table: 'TemplatesUri',
+        id: id
+      },
+      success: function success(response) {
+        $('#templates_uri tr[id="' + id + '"]').remove();
+      },
+      error: function error(xhr, status, _error3) {
+        console.debug("Ошибка запроса", status, _error3);
+      }
+    });
+  },
+  removePbxRow: function removePbxRow(id, button) {
+    if (!$(button).find('i').hasClass('close')) {
+      return;
     }
 
-    return initializeForm;
-  }()
+    $.ajax({
+      type: "POST",
+      url: globalRootUrl + idUrl + "/delete",
+      data: {
+        table: 'OtherPBX',
+        id: id
+      },
+      success: function success(response) {
+        $('#other_pbx tr[id="' + id + '"]').remove();
+      },
+      error: function error(xhr, status, _error4) {
+        console.debug("Ошибка запроса", status, _error4);
+      }
+    });
+  }
 };
 $(document).ready(function () {
   moduleAutoprovision.initialize();
 });
-//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInNyYy9tb2R1bGUtYXV0b3Byb3Zpc2lvbi1pbmRleC5qcyJdLCJuYW1lcyI6WyJtb2R1bGVBdXRvcHJvdmlzaW9uIiwiJGZvcm1PYmoiLCIkIiwiaW5pdGlhbGl6ZSIsImluaXRpYWxpemVGb3JtIiwiYXBwbHlDb25maWd1cmF0aW9uQ2hhbmdlcyIsImFwaSIsInVybCIsIkNvbmZpZyIsInBieFVybCIsIm9uIiwic3VjY2Vzc1Rlc3QiLCJyZXNwb25zZSIsIk9iamVjdCIsImtleXMiLCJsZW5ndGgiLCJyZXN1bHQiLCJvblN1Y2Nlc3MiLCJjYkJlZm9yZVNlbmRGb3JtIiwic2V0dGluZ3MiLCJkYXRhIiwiZm9ybSIsImNiQWZ0ZXJTZW5kRm9ybSIsIkZvcm0iLCJnbG9iYWxSb290VXJsIiwiZG9jdW1lbnQiLCJyZWFkeSJdLCJtYXBwaW5ncyI6Ijs7QUFBQTs7Ozs7OztBQU1BO0FBRUEsSUFBTUEsbUJBQW1CLEdBQUc7QUFDM0JDLEVBQUFBLFFBQVEsRUFBRUMsQ0FBQyxDQUFDLDRCQUFELENBRGdCO0FBRTNCQyxFQUFBQSxVQUYyQjtBQUFBLDBCQUVkO0FBQ1o7QUFDQUgsTUFBQUEsbUJBQW1CLENBQUNJLGNBQXBCO0FBQ0E7O0FBTDBCO0FBQUE7O0FBTzNCOzs7QUFHQUMsRUFBQUEseUJBVjJCO0FBQUEseUNBVUM7QUFDM0JILE1BQUFBLENBQUMsQ0FBQ0ksR0FBRixDQUFNO0FBQ0xDLFFBQUFBLEdBQUcsWUFBS0MsTUFBTSxDQUFDQyxNQUFaLG9EQURFO0FBRUxDLFFBQUFBLEVBQUUsRUFBRSxLQUZDO0FBR0xDLFFBQUFBLFdBSEs7QUFBQSwrQkFHT0MsUUFIUCxFQUdpQjtBQUNyQjtBQUNBLG1CQUFPQyxNQUFNLENBQUNDLElBQVAsQ0FBWUYsUUFBWixFQUFzQkcsTUFBdEIsR0FBK0IsQ0FBL0IsSUFBb0NILFFBQVEsQ0FBQ0ksTUFBVCxLQUFvQixJQUEvRDtBQUNBOztBQU5JO0FBQUE7QUFPTEMsUUFBQUEsU0FQSztBQUFBLCtCQU9PLENBQ1g7QUFDQTs7QUFUSTtBQUFBO0FBQUEsT0FBTjtBQVdBOztBQXRCMEI7QUFBQTtBQXVCM0JDLEVBQUFBLGdCQXZCMkI7QUFBQSw4QkF1QlZDLFFBdkJVLEVBdUJBO0FBQzFCLFVBQU1ILE1BQU0sR0FBR0csUUFBZjtBQUNBSCxNQUFBQSxNQUFNLENBQUNJLElBQVAsR0FBY3BCLG1CQUFtQixDQUFDQyxRQUFwQixDQUE2Qm9CLElBQTdCLENBQWtDLFlBQWxDLENBQWQ7QUFDQSxhQUFPTCxNQUFQO0FBQ0E7O0FBM0IwQjtBQUFBO0FBNEIzQk0sRUFBQUEsZUE1QjJCO0FBQUEsK0JBNEJUO0FBQ2pCdEIsTUFBQUEsbUJBQW1CLENBQUNLLHlCQUFwQjtBQUNBOztBQTlCMEI7QUFBQTtBQStCM0JELEVBQUFBLGNBL0IyQjtBQUFBLDhCQStCVjtBQUNoQm1CLE1BQUFBLElBQUksQ0FBQ3RCLFFBQUwsR0FBZ0JELG1CQUFtQixDQUFDQyxRQUFwQztBQUNBc0IsTUFBQUEsSUFBSSxDQUFDaEIsR0FBTCxhQUFjaUIsYUFBZCwrQkFGZ0IsQ0FHaEI7O0FBQ0FELE1BQUFBLElBQUksQ0FBQ0wsZ0JBQUwsR0FBd0JsQixtQkFBbUIsQ0FBQ2tCLGdCQUE1QztBQUNBSyxNQUFBQSxJQUFJLENBQUNELGVBQUwsR0FBdUJ0QixtQkFBbUIsQ0FBQ3NCLGVBQTNDO0FBQ0FDLE1BQUFBLElBQUksQ0FBQ3BCLFVBQUw7QUFDQTs7QUF0QzBCO0FBQUE7QUFBQSxDQUE1QjtBQTBDQUQsQ0FBQyxDQUFDdUIsUUFBRCxDQUFELENBQVlDLEtBQVosQ0FBa0IsWUFBTTtBQUN2QjFCLEVBQUFBLG1CQUFtQixDQUFDRyxVQUFwQjtBQUNBLENBRkQiLCJzb3VyY2VzQ29udGVudCI6WyIvKlxuICogQ29weXJpZ2h0IMKpIE1JS08gTExDIC0gQWxsIFJpZ2h0cyBSZXNlcnZlZFxuICogVW5hdXRob3JpemVkIGNvcHlpbmcgb2YgdGhpcyBmaWxlLCB2aWEgYW55IG1lZGl1bSBpcyBzdHJpY3RseSBwcm9oaWJpdGVkXG4gKiBQcm9wcmlldGFyeSBhbmQgY29uZmlkZW50aWFsXG4gKiBXcml0dGVuIGJ5IEFsZXhleSBQb3J0bm92LCAxMiAyMDE4XG4gKi9cbi8qIGdsb2JhbCBnbG9iYWxSb290VXJsLENvbmZpZywgRm9ybSAqL1xuXG5jb25zdCBtb2R1bGVBdXRvcHJvdmlzaW9uID0ge1xuXHQkZm9ybU9iajogJCgnI21vZHVsZS1hdXRvcHJvdmlzaW9uLWZvcm0nKSxcblx0aW5pdGlhbGl6ZSgpIHtcblx0XHQvLyDQlNC40L3QsNC80LjRh9C10YHQutCw0Y8g0L/RgNC+0LLQtdGA0LrQsCDRgdCy0L7QsdC+0LTQtdC9INC70Lgg0LLQvdGD0YLRgNC10L3QvdC40Lkg0L3QvtC80LXRgFxuXHRcdG1vZHVsZUF1dG9wcm92aXNpb24uaW5pdGlhbGl6ZUZvcm0oKTtcblx0fSxcblxuXHQvKipcbiAgICAgKiDQn9GA0LjQvNC10L3QtdC90LjQtSDQvdCw0YHRgtGA0L7QtdC6INC80L7QtNGD0LvRjyDQv9C+0YHQu9C1INC40LfQvNC10L3QtdC90LjRjyDQtNCw0L3QvdGL0YUg0YTQvtGA0LzRi1xuICAgICAqL1xuXHRhcHBseUNvbmZpZ3VyYXRpb25DaGFuZ2VzKCkge1xuXHRcdCQuYXBpKHtcblx0XHRcdHVybDogYCR7Q29uZmlnLnBieFVybH0vcGJ4Y29yZS9hcGkvbW9kdWxlcy9Nb2R1bGVBdXRvcHJvdmlzaW9uL3JlbG9hZGAsXG5cdFx0XHRvbjogJ25vdycsXG5cdFx0XHRzdWNjZXNzVGVzdChyZXNwb25zZSkge1xuXHRcdFx0XHQvLyB0ZXN0IHdoZXRoZXIgYSBKU09OIHJlc3BvbnNlIGlzIHZhbGlkXG5cdFx0XHRcdHJldHVybiBPYmplY3Qua2V5cyhyZXNwb25zZSkubGVuZ3RoID4gMCAmJiByZXNwb25zZS5yZXN1bHQgPT09IHRydWU7XG5cdFx0XHR9LFxuXHRcdFx0b25TdWNjZXNzKCkge1xuXHRcdFx0XHQvLyBtb2R1bGVBdXRvcHJvdmlzaW9uLnRlc3RDb25uZWN0aW9uKCk7XG5cdFx0XHR9LFxuXHRcdH0pO1xuXHR9LFxuXHRjYkJlZm9yZVNlbmRGb3JtKHNldHRpbmdzKSB7XG5cdFx0Y29uc3QgcmVzdWx0ID0gc2V0dGluZ3M7XG5cdFx0cmVzdWx0LmRhdGEgPSBtb2R1bGVBdXRvcHJvdmlzaW9uLiRmb3JtT2JqLmZvcm0oJ2dldCB2YWx1ZXMnKTtcblx0XHRyZXR1cm4gcmVzdWx0O1xuXHR9LFxuXHRjYkFmdGVyU2VuZEZvcm0oKSB7XG5cdFx0bW9kdWxlQXV0b3Byb3Zpc2lvbi5hcHBseUNvbmZpZ3VyYXRpb25DaGFuZ2VzKCk7XG5cdH0sXG5cdGluaXRpYWxpemVGb3JtKCkge1xuXHRcdEZvcm0uJGZvcm1PYmogPSBtb2R1bGVBdXRvcHJvdmlzaW9uLiRmb3JtT2JqO1xuXHRcdEZvcm0udXJsID0gYCR7Z2xvYmFsUm9vdFVybH1tb2R1bGUtYXV0b3Byb3Zpc2lvbi9zYXZlYDtcblx0XHQvLyBGb3JtLnZhbGlkYXRlUnVsZXMgPSBtb2R1bGVBdXRvcHJvdmlzaW9uLnZhbGlkYXRlUnVsZXM7XG5cdFx0Rm9ybS5jYkJlZm9yZVNlbmRGb3JtID0gbW9kdWxlQXV0b3Byb3Zpc2lvbi5jYkJlZm9yZVNlbmRGb3JtO1xuXHRcdEZvcm0uY2JBZnRlclNlbmRGb3JtID0gbW9kdWxlQXV0b3Byb3Zpc2lvbi5jYkFmdGVyU2VuZEZvcm07XG5cdFx0Rm9ybS5pbml0aWFsaXplKCk7XG5cdH0sXG59O1xuXG5cbiQoZG9jdW1lbnQpLnJlYWR5KCgpID0+IHtcblx0bW9kdWxlQXV0b3Byb3Zpc2lvbi5pbml0aWFsaXplKCk7XG59KTtcbiJdfQ==
+//# sourceMappingURL=module-autoprovision-index.js.map
