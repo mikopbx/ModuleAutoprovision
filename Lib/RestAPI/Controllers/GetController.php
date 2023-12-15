@@ -10,6 +10,7 @@ namespace Modules\ModuleAutoprovision\Lib\RestAPI\Controllers;
 use MikoPBX\Common\Models\Extensions;
 use MikoPBX\Common\Models\Sip;
 use MikoPBX\Core\System\Network;
+use MikoPBX\Modules\PbxExtensionUtils;
 use MikoPBX\PBXCoreREST\Controllers\Modules\ModulesControllerBase;
 use Modules\ModuleAutoprovision\Lib\Transliterate;
 use Modules\ModuleAutoprovision\Models\OtherPBX;
@@ -181,7 +182,8 @@ class GetController extends ModulesControllerBase
 
         $bookUsers = [];
         $tmpPhoneBookArray = [$nameBook=> ''];
-        if(class_exists('\Modules\ModuleUsersGroups\Models\UsersGroups')){
+        if(class_exists('\Modules\ModuleUsersGroups\Models\UsersGroups')
+            && PbxExtensionUtils::isEnabled('ModuleUsersGroups')){
             $manager = $this->di->get('modelsManager');
             $parameters = [
                 'models'     => [
