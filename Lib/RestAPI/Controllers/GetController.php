@@ -151,9 +151,10 @@ class GetController extends ModulesControllerBase
 
     private function echoPhoneBook($uri):void
     {
-        $phoneBook = '';
+        $phoneBook = "";
         $nameBook = $_REQUEST['name']??'';
         if(empty($nameBook)){
+            $phoneBook.= "<?xml version='1.0' encoding='UTF-8' ?>".PHP_EOL;
             ['hostname' => $nameBook] = Network::getHostName();
             $otherPbx = OtherPBX::find()->toArray();
             $client = new Client();
