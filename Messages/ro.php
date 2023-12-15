@@ -38,4 +38,23 @@ return [
 <br>Pentru a configura telefonul, trebuie să apelați „<b>%extension%</b>” de la acesta, unde XXX este numărul intern al PBX-ului.
 <br><br>
 Autoconfigurarea este posibilă numai pentru rețeaua locală a întreprinderii, pentru telefoanele <b>Yealink, Snom, Fanvil</b>.',
+    'mod_Autoprovision_phone_settings_title' => 'Setările telefonului',
+    'mod_Autoprovision_phone_templates' => 'Șabloane de setări',
+    'mod_Autoprovision_general_settings' => 'Setări URI',
+    'mod_Autoprovision_pnp' => 'Setări PnP',
+    'mod_Autoprovision_addNew' => 'Adăuga',
+    'mod_Autoprovision_templates_uri_uri' => 'URI',
+    'mod_Autoprovision_templates_uri_template' => 'Probă',
+    'mod_Autoprovision_phone_settings_user' => 'Angajat',
+    'mod_Autoprovision_phone_settings_mac' => 'Adresa mac',
+    'mod_Autoprovision_template_name' => 'Nume',
+    'mod_Autoprovision_search_tags' => 'Căutare...',
+    'mod_Autoprovision_edit_template' => 'Editarea unui șablon',
+    'mod_Autoprovision_end_edit_template' => 'Terminați editarea',
+    'mod_Autoprovision_other_pbx' => 'Carte de telefoane',
+    'mod_Autoprovision_other_pbx_name' => 'Numele centrală telefonică',
+    'mod_Autoprovision_other_pbx_address' => 'adresa rețelei PBX',
+    'mod_Autoprovision_templates_header' => 'Când descrieți un șablon, puteți utiliza următorii parametri: <b>{SIP_USER_NAME}</b> - numele angajatului <b>{SIP_NUM}</b> - număr intern (autentificare) <b>{SIP_PASS}</b> - parolă',
+    'mod_Autoprovision_templates_users_header' => 'Când descrieți o adresă MAC, este permisă utilizarea simbolului <b>%</b> - adică „orice set de caractere” <br>
+Șablonul <b>805e0c67%</b> se va potrivi cu <b>805e0c670001</b> și <b>805e0c670002</b>',
 ];
