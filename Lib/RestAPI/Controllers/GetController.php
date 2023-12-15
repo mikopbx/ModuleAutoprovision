@@ -217,6 +217,9 @@ class GetController extends ModulesControllerBase
             $tmpPhoneBookArray[$book].= "\t".'</DirectoryEntry>'.PHP_EOL;
         }
         foreach ($tmpPhoneBookArray as $key => $value){
+            if(empty($value)){
+                continue;
+            }
             $phoneBook.= "<{$key}IPPhoneDirectory>".PHP_EOL;
             $phoneBook.= $value;
             $phoneBook.= "</{$key}IPPhoneDirectory>".PHP_EOL;
