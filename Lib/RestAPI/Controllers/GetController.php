@@ -10,6 +10,7 @@ namespace Modules\ModuleAutoprovision\Lib\RestAPI\Controllers;
 use MikoPBX\Common\Models\Extensions;
 use MikoPBX\Common\Models\Sip;
 use MikoPBX\Core\System\Network;
+use MikoPBX\Core\System\Util;
 use MikoPBX\Modules\PbxExtensionUtils;
 use MikoPBX\PBXCoreREST\Controllers\Modules\ModulesControllerBase;
 use Modules\ModuleAutoprovision\Lib\Transliterate;
@@ -40,6 +41,7 @@ class GetController extends ModulesControllerBase
      */
     public function getConfigStatic(...$args):void
     {
+        Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$this->request->getHeader('User-Agent'). ", URI: ". $_REQUEST['_url']);
         $uri = substr('/pbxcore'.$_REQUEST['_url'],  strlen(AutoprovisionConf::BASE_URI));
         if($uri === '/phonebook'){
             $this->echoPhoneBook($uri);
@@ -146,6 +148,7 @@ class GetController extends ModulesControllerBase
                 echo $config;
             }
         }
+        $this->response->setStatusCode(404, 'Not found');
         $this->response->sendRaw();
     }
 
