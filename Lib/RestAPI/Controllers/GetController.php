@@ -9,6 +9,7 @@
 namespace Modules\ModuleAutoprovision\Lib\RestAPI\Controllers;
 use MikoPBX\Common\Models\Extensions;
 use MikoPBX\Common\Models\Sip;
+use MikoPBX\Common\Models\Users;
 use MikoPBX\Core\System\Network;
 use MikoPBX\Core\System\Util;
 use MikoPBX\Modules\PbxExtensionUtils;
@@ -41,11 +42,12 @@ class GetController extends ModulesControllerBase
      */
     public function getConfigStatic(...$args):void
     {
-        Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$this->request->getHeader('User-Agent'). ", URI: ". $_REQUEST['_url']);
+        $userAgent = $this->request->getHeader('User-Agent');
         $uri = substr('/pbxcore'.$_REQUEST['_url'],  strlen(AutoprovisionConf::BASE_URI));
         if($uri === '/phonebook'){
             $this->echoPhoneBook($uri);
             $this->response->sendRaw();
+            Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url'].', code: 200');
             return;
         }
         $manager = $this->di->get('modelsManager');
@@ -81,17 +83,26 @@ class GetController extends ModulesControllerBase
             $this->response->sendHeaders();
             echo $result[0]['template'];
             $this->response->sendRaw();
+            Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url']. ', code: 200');
             return;
         }
         $pattern = '/([0-9A-Fa-f]{2}[:-]?){5}([0-9A-Fa-f]{2})/i';
         if (preg_match_all($pattern, $_REQUEST['_url'], $matches)) {
+            $mac = $matches[0][0]??'';
+            if(stripos($userAgent, 'yealink') !== false && stripos($uri, '.boot')!==false){
+                Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url']. ', code: 404');
+                $this->response->setStatusCode(404, 'Ignore boot config yealink');
+                $this->response->sendRaw();
+                return;
+            }
+
             $parameters = [
                 'models'     => [
                     'TemplatesUsers' => TemplatesUsers::class,
                 ],
                 'conditions' => ':mac: LIKE TemplatesUsers.mac',
                 'bind' => [
-                    'mac'  => $matches[0][0]??'',
+                    'mac'  => $mac,
                 ],
                 'columns'    => [
                     'id'            => 'TemplatesUsers.id',
@@ -146,8 +157,12 @@ class GetController extends ModulesControllerBase
                 $this->response->setHeader('Content-Transfer-Encoding', "binary");
                 $this->response->sendHeaders();
                 echo $config;
+                Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url'].', code: 200');
+                return;
             }
         }
+
+        Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url']. ', code: 404');
         $this->response->setStatusCode(404, 'Not found');
         $this->response->sendRaw();
     }
@@ -157,7 +172,7 @@ class GetController extends ModulesControllerBase
         $phoneBook = "";
         $nameBook = $_REQUEST['name']??'';
         if(empty($nameBook)){
-            $phoneBook.= "<?xml version='1.0' encoding='UTF-8' ?>".PHP_EOL;
+            $phoneBook.= "<?xml version='1.0' encoding='UTF-8'?>".PHP_EOL;
             ['hostname' => $nameBook] = Network::getHostName();
             $otherPbx = OtherPBX::find()->toArray();
             $client = new Client();
@@ -179,6 +194,8 @@ class GetController extends ModulesControllerBase
                     if ($isXmlValid !== false) {
                         $phoneBook.= $xmlContent.PHP_EOL;
                     }
+                }else{
+                    Util::sysLogMsg('autoprovision-http', "Fail get phonebook from $address, code: $code");
                 }
             }
             unset($otherPbx);
@@ -186,9 +203,9 @@ class GetController extends ModulesControllerBase
 
         $bookUsers = [];
         $tmpPhoneBookArray = [$nameBook=> ''];
+        $manager = $this->di->get('modelsManager');
         if(class_exists('\Modules\ModuleUsersGroups\Models\UsersGroups')
             && PbxExtensionUtils::isEnabled('ModuleUsersGroups')){
-            $manager = $this->di->get('modelsManager');
             $parameters = [
                 'models'     => [
                     'GroupMembers' => GroupMembers::class,
@@ -212,11 +229,33 @@ class GetController extends ModulesControllerBase
                 $tmpPhoneBookArray[$group['name']] = '';
             }
         }
-        $users    = Extensions::find(["type = 'SIP'", 'columns' => ['number', 'callerid', 'userid']])->toArray();
+
+
+        $parameters = [
+            'models'     => [
+                'Extensions' => Extensions::class,
+            ],
+            'conditions' => "type = 'SIP'",
+            'columns'    => [
+                'number'   => 'Extensions.number',
+                'callerid' => 'Extensions.callerid',
+                'username' => 'Users.username',
+            ],
+            'joins'      => [
+                'Extensions' => [
+                    0 => Users::class,
+                    1 => 'Extensions.userid = Users.id',
+                    2 => 'Users',
+                    3 => 'LEFT',
+                ],
+            ],
+        ];
+        $users = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
+        // $users    = Extensions::find(["type = 'SIP'", 'columns' => ['number', 'callerid', 'userid']])->toArray();
         foreach ($users as $userData) {
             $book = $bookUsers[$userData['userid']]??$nameBook;
             $tmpPhoneBookArray[$book].= "\t".'<DirectoryEntry>'.PHP_EOL;
-            $tmpPhoneBookArray[$book].= "\t\t"."<Name>{$userData['callerid']}</Name>".PHP_EOL;
+            $tmpPhoneBookArray[$book].= "\t\t"."<Name>{$userData['username']}</Name>".PHP_EOL;
             $tmpPhoneBookArray[$book].= "\t\t"."<Telephone>{$userData['number']}</Telephone>".PHP_EOL;
             $tmpPhoneBookArray[$book].= "\t".'</DirectoryEntry>'.PHP_EOL;
         }
