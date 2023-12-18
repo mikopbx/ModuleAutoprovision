@@ -65,6 +65,7 @@ class GetController extends ModulesControllerBase
                 'name'          => 'Templates.name',
                 'uri'           => 'TemplatesUri.uri',
             ],
+            'order' => 'TemplatesUri.uri DESC',
             'joins'      => [
                 'TemplatesUri' => [
                     0 => Templates::class,
@@ -183,7 +184,7 @@ class GetController extends ModulesControllerBase
                     continue;
                 }
                 try {
-                    $response = $client->request('GET', "http://$address".AutoprovisionConf::BASE_URI.$uri."?name={$pbx['name']}", ['timeout' => 1, 'connect_timeout' => 1, 'read_timeout' => 1]);;
+                    $response = $client->request('GET', "http://$address".AutoprovisionConf::BASE_URI.$uri."?name={$pbx['name']}", ['timeout' => 1, 'connect_timeout' => 1, 'read_timeout' => 1]);
                     $code = $response->getStatusCode();
                 }catch (\Exception $e){
                     $code = 0;
