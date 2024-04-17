@@ -154,9 +154,9 @@ class Autoprovision extends Di\Injectable
             $phone_data = null;
             exec("timeout -t 1 ping {$ip} -c 1");
             // Анализируем MAC адрес устройства.
-            $busyboxPath = Util::which('busybox');
-            $awkPath = Util::which('awk');
-            exec("{$busyboxPath} arp -D {$ip} -n | {$busyboxPath} {$awkPath}  '{ print $4 \" \" $7}' 2>&1", $out);
+            $arp = Util::which('arp');
+            $awk = Util::which('awk');
+            exec("$arp -D {$ip} -n | $awk  '{ print $4 \" \" $7}' 2>&1", $out);
 
             [$mac, $eth] = explode(' ', $out[0] ?? '');
             $mac = str_replace(':', '', $mac);
