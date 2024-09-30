@@ -8,6 +8,7 @@
 
 namespace Modules\ModuleAutoprovision\Lib\RestAPI\Controllers;
 use MikoPBX\Common\Models\Extensions;
+use MikoPBX\Common\Models\PbxSettings;
 use MikoPBX\Common\Models\Sip;
 use MikoPBX\Common\Models\Users;
 use MikoPBX\Core\System\Network;
@@ -23,7 +24,6 @@ use Modules\ModuleAutoprovision\Models\TemplatesUsers;
 use GuzzleHttp\Client;
 use Modules\ModuleUsersGroups\Models\GroupMembers;
 use Modules\ModuleUsersGroups\Models\UsersGroups;
-use Phalcon\Text;
 
 class GetController extends ModulesControllerBase
 {
@@ -280,7 +280,14 @@ class GetController extends ModulesControllerBase
         $inputString = preg_replace('/\s+/', '-', $inputString);
         $inputString = Transliterate::ruToLat($inputString);
         $inputString = preg_replace('/[^A-Za-z0-9-]/u', '', $inputString);
-        return Text::camelize($inputString);
+
+        $pbxVersion = PbxSettings::getValueByKey('PBXVersion');
+        if (version_compare($pbxVersion, '2024.2.30', '>')) {
+            $result =  \MikoPBX\Common\Library\Text::camelize($inputString);
+        } else {
+            $result =  \Phalcon\Text::camelize($inputString);
+        }
+        return $result;
     }
 
     /**
