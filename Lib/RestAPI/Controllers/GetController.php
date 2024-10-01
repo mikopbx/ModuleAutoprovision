@@ -8,13 +8,13 @@
 
 namespace Modules\ModuleAutoprovision\Lib\RestAPI\Controllers;
 use MikoPBX\Common\Models\Extensions;
-use MikoPBX\Common\Models\PbxSettings;
 use MikoPBX\Common\Models\Sip;
 use MikoPBX\Common\Models\Users;
 use MikoPBX\Core\System\Network;
 use MikoPBX\Core\System\Util;
 use MikoPBX\Modules\PbxExtensionUtils;
 use MikoPBX\PBXCoreREST\Controllers\Modules\ModulesControllerBase;
+use Modules\ModuleAutoprovision\Lib\MikoPBXVersion;
 use Modules\ModuleAutoprovision\Lib\Transliterate;
 use Modules\ModuleAutoprovision\Models\OtherPBX;
 use Modules\ModuleAutoprovision\Models\Templates;
@@ -276,18 +276,13 @@ class GetController extends ModulesControllerBase
         echo $phoneBook;
     }
 
-    private function camelize($inputString){
+    private function camelize($inputString): string
+    {
         $inputString = preg_replace('/\s+/', '-', $inputString);
         $inputString = Transliterate::ruToLat($inputString);
         $inputString = preg_replace('/[^A-Za-z0-9-]/u', '', $inputString);
-
-        $pbxVersion = PbxSettings::getValueByKey('PBXVersion');
-        if (version_compare($pbxVersion, '2024.2.30', '>')) {
-            $result =  \MikoPBX\Common\Library\Text::camelize($inputString);
-        } else {
-            $result =  \Phalcon\Text::camelize($inputString);
-        }
-        return $result;
+        $textClass = MikoPBXVersion::getTextClass();
+        return $textClass::camelize($inputString);
     }
 
     /**
