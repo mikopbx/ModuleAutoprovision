@@ -39,13 +39,20 @@ class GetController extends ModulesControllerBase
     /**
      * curl 'http://127.0.0.1/pbxcore/api/autoprovision-http/1/2/3'
      * curl 'http://127.0.0.1/pbxcore/api/autoprovision-http/phonebook'
+     * curl 'http://127.0.0.1/pbxcore/api/autoprovision-http/yealink'
+     * curl 'http://127.0.0.1/pbxcore/api/autoprovision-http/grandstream'
      */
     public function getConfigStatic(...$args):void
     {
         $userAgent = $this->request->getHeader('User-Agent');
         $uri = substr('/pbxcore'.$_REQUEST['_url'],  strlen(AutoprovisionConf::BASE_URI));
-        if($uri === '/phonebook'){
-            $this->echoPhoneBook($uri);
+        if($uri === '/phonebook' || $uri === '/yealink'){
+            $this->echoPhoneBookYealink($uri);
+            $this->response->sendRaw();
+            Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url'].', code: 200');
+            return;
+        }elseif ($uri === '/grandstream'){
+            $this->echoPhoneBookGrandStream($uri);
             $this->response->sendRaw();
             Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url'].', code: 200');
             return;
@@ -168,7 +175,89 @@ class GetController extends ModulesControllerBase
         $this->response->sendRaw();
     }
 
-    private function echoPhoneBook($uri):void
+    private function echoPhoneBookGrandStream($uri):void
+    {
+        $bookUsers = [];
+        $phoneBook = "<?xml version='1.0' encoding='UTF-8'?>".PHP_EOL;
+        $phoneBook.= "<AddressBook>".PHP_EOL;
+        $manager = $this->di->get('modelsManager');
+        if(class_exists('\Modules\ModuleUsersGroups\Models\UsersGroups')
+            && PbxExtensionUtils::isEnabled('ModuleUsersGroups')){
+            $parameters = [
+                'models'     => [
+                    'GroupMembers' => GroupMembers::class,
+                ],
+                'columns'    => [
+                    'user_id'   => 'GroupMembers.user_id',
+                    'name'      => 'UsersGroups.name',
+                    'group_id'  => 'UsersGroups.id',
+                ],
+                'joins'      => [
+                    'GroupMembers' => [
+                        0 => UsersGroups::class,
+                        1 => 'UsersGroups.id = GroupMembers.group_id',
+                        2 => 'UsersGroups',
+                        3 => 'LEFT',
+                    ],
+                ],
+            ];
+            $groupsData = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
+            foreach ($groupsData as $group){
+                $bookUsers[$group['user_id']] = $group['id'];
+                $phoneBook.= '<pbgroup>'.PHP_EOL.
+                             "\t".'<id>'.$group['id'].'</id>'.PHP_EOL.
+                             "\t".'<name>'.$group['name'].'</name>'.PHP_EOL.
+                             '</pbgroup>';
+            }
+        }
+
+        $parameters = [
+            'models'     => [
+                'Extensions' => Extensions::class,
+            ],
+            'conditions' => "type = 'SIP'",
+            'columns'    => [
+                'number'   => 'Extensions.number',
+                'callerid' => 'Extensions.callerid',
+                'username' => 'Users.username',
+                'user_id' => 'Users.id',
+            ],
+            'joins'      => [
+                'Extensions' => [
+                    0 => Users::class,
+                    1 => 'Extensions.userid = Users.id',
+                    2 => 'Users',
+                    3 => 'LEFT',
+                ],
+            ],
+        ];
+        $users = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
+        foreach ($users as $userData) {
+            $groupId = $bookUsers[$userData['userid']]??'';
+            $phoneBook.='<Contact>'.PHP_EOL.
+                        "\t".'<id>'.$userData['user_id'].'</id>'.PHP_EOL.
+                        "\t".'<FirstName>'.$userData['username'].'</FirstName>'.PHP_EOL.
+                        "\t".'<Phone type="Work">'.PHP_EOL.
+                        "\t\t".'<phonenumber>'.$userData['number'].'</phonenumber>'.PHP_EOL.
+                        "\t\t".'<accountindex>0</accountindex>'.PHP_EOL.
+                        "\t".'</Phone>'.PHP_EOL;
+
+            if(!empty($groupId)){
+                $phoneBook.="\t".'<Group>'.$groupId.'</Group>'.PHP_EOL;
+            }
+            $phoneBook.='</Contact>'.PHP_EOL;
+        }
+        $phoneBook.= "</AddressBook>".PHP_EOL;
+
+        $this->response->setHeader('Content-Description', "config file");
+        $this->response->setHeader('Content-Disposition', "attachment; filename=".basename($uri).'.xml');
+        $this->response->setHeader('Content-type', "text/plain");
+        $this->response->setHeader('Content-Transfer-Encoding', "binary");
+        $this->response->sendHeaders();
+        echo $phoneBook;
+
+    }
+    private function echoPhoneBookYealink($uri):void
     {
         $phoneBook = "";
         $nameBook = $_REQUEST['name']??'';
