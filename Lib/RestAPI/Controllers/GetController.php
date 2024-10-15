@@ -206,7 +206,7 @@ class GetController extends ModulesControllerBase
                 $bookUsers[$group['user_id']] = $group['id'];
                 $phoneBook.= '<pbgroup>'.PHP_EOL.
                              "\t".'<id>'.$group['id'].'</id>'.PHP_EOL.
-                             "\t".'<name>'.$group['name'].'</name>'.PHP_EOL.
+                             "\t".'<name>'.trim($group['name']).'</name>'.PHP_EOL.
                              '</pbgroup>';
             }
         }
@@ -236,7 +236,7 @@ class GetController extends ModulesControllerBase
             $groupId = $bookUsers[$userData['userid']]??'';
             $phoneBook.='<Contact>'.PHP_EOL.
                         "\t".'<id>'.$userData['user_id'].'</id>'.PHP_EOL.
-                        "\t".'<FirstName>'.$userData['username'].'</FirstName>'.PHP_EOL.
+                        "\t".'<FirstName>'.trim($userData['username']).'</FirstName>'.PHP_EOL.
                         "\t".'<Phone type="Work">'.PHP_EOL.
                         "\t\t".'<phonenumber>'.$userData['number'].'</phonenumber>'.PHP_EOL.
                         "\t\t".'<accountindex>0</accountindex>'.PHP_EOL.
