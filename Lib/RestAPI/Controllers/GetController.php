@@ -203,11 +203,16 @@ class GetController extends ModulesControllerBase
             ];
             $groupsData = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
             foreach ($groupsData as $group){
-                $bookUsers[$group['user_id']] = $group['id'];
+                $bookUsers[$group['user_id']] = $group['group_id'];
+
+                $idText = '<id>'.$group['group_id'].'</id>';
+                if(stripos($phoneBook,$idText) !== false){
+                    continue;
+                }
                 $phoneBook.= '<pbgroup>'.PHP_EOL.
-                             "\t".'<id>'.$group['id'].'</id>'.PHP_EOL.
+                             "\t".$idText.PHP_EOL.
                              "\t".'<name>'.trim($group['name']).'</name>'.PHP_EOL.
-                             '</pbgroup>';
+                             '</pbgroup>'.PHP_EOL;
             }
         }
 
@@ -233,7 +238,7 @@ class GetController extends ModulesControllerBase
         ];
         $users = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
         foreach ($users as $userData) {
-            $groupId = $bookUsers[$userData['userid']]??'';
+            $groupId = $bookUsers[$userData['user_id']]??'';
             $phoneBook.='<Contact>'.PHP_EOL.
                         "\t".'<id>'.$userData['user_id'].'</id>'.PHP_EOL.
                         "\t".'<FirstName>'.trim($userData['username']).'</FirstName>'.PHP_EOL.
