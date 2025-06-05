@@ -52,12 +52,12 @@ class WorkerProvisioningServerPnP extends WorkerBase
 
         $re = '/\w{2}:?\w{2}:?\w{2}:?\w{2}:?\w{2}:?\w{2}/m';
 
-        preg_match_all($re, strtolower(str_replace(':', '', $data->mac_white??'')), $this->mac_white, PREG_SET_ORDER);
+        preg_match_all($re, strtolower(str_replace(':', '', $data->mac_white??'')), $this->mac_white??[], PREG_SET_ORDER);
         if (count($this->mac_white) > 0) {
             $this->mac_white = array_merge(...$this->mac_white);
         }
 
-        preg_match_all($re, strtolower(str_replace(':', '', $data->mac_black??'')), $this->mac_black, PREG_SET_ORDER);
+        preg_match_all($re, strtolower(str_replace(':', '', $data->mac_black??'')), $this->mac_black??[], PREG_SET_ORDER);
         if (count($this->mac_black) > 0) {
             $this->mac_black = array_merge(...$this->mac_black);
         }

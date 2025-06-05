@@ -3,5 +3,14 @@
   "moduleUniqueID":"ModuleAutoprovision",
   "support_email": "help@miko.ru",
   "version": "%ModuleVersion%",
-  "min_pbx_version": "2024.1.42"
+  "min_pbx_version": "2024.1.42",
+  "wiki_links": {
+    "ru": {"https://wiki.mikopbx.com/module-autoprovision": "https://docs.mikopbx.com/mikopbx/modules/miko/module-autoprovision"},
+    "en": {"https://wiki.mikopbx.com/module-autoprovision": "https://docs.mikopbx.com/mikopbx/english/modules/miko/module-autoprovision"}
+  },
+  "release_settings": {
+    "publish_release": true,
+    "changelog_enabled": true,
+    "create_github_release": true
+  }
 }
