@@ -21,4 +21,23 @@ return [
 <br>Um das Telefon zu konfigurieren, müssen Sie von dort aus „<b>%extension%</b>“ anrufen, wobei XXX die interne Nummer der Telefonanlage ist.
 <br><br>
 Die automatische Konfiguration ist nur für das lokale Netzwerk des Unternehmens und für Telefone <b>Yealink, Snom, Fanvil</b> möglich.',
+    'mod_Autoprovision_phone_settings_title' => 'Telefoneinstellungen',
+    'mod_Autoprovision_phone_templates' => 'Einstellungsvorlagen',
+    'mod_Autoprovision_general_settings' => 'URI-Einstellungen',
+    'mod_Autoprovision_pnp' => 'PnP-Einstellungen',
+    'mod_Autoprovision_addNew' => 'Hinzufügen',
+    'mod_Autoprovision_templates_uri_uri' => 'URI',
+    'mod_Autoprovision_templates_uri_template' => 'Probe',
+    'mod_Autoprovision_phone_settings_user' => 'Mitarbeiter',
+    'mod_Autoprovision_phone_settings_mac' => 'MAC-Adresse',
+    'mod_Autoprovision_template_name' => 'Name',
+    'mod_Autoprovision_search_tags' => 'Suchen...',
+    'mod_Autoprovision_edit_template' => 'Bearbeiten einer Vorlage',
+    'mod_Autoprovision_end_edit_template' => 'Beenden Sie die Bearbeitung',
+    'mod_Autoprovision_other_pbx' => 'Telefonbuch',
+    'mod_Autoprovision_other_pbx_name' => 'Name der Telefonzentrale',
+    'mod_Autoprovision_other_pbx_address' => 'PBX-Netzwerkadresse',
+    'mod_Autoprovision_templates_header' => 'Bei der Beschreibung einer Vorlage können Sie folgende Parameter verwenden: <b>{SIP_USER_NAME}</b> – Mitarbeitername <b>{SIP_NUM}</b> – interne Nummer (Login) <b>{SIP_PASS}</b> – Passwort',
+    'mod_Autoprovision_templates_users_header' => 'Bei der Beschreibung einer MAC-Adresse ist die Verwendung des Symbols <b>%</b> zulässig, was „beliebiger Zeichensatz“ bedeutet <br>
+Die Vorlage <b>805e0c67%</b> entspricht <b>805e0c670001</b> und <b>805e0c670002</b>',
 ];

@@ -21,4 +21,23 @@ return [
 <br>För att konfigurera telefonen måste du ringa "<b>%extension%</b>" från den, där XXX är det interna numret på telefonväxeln.
 <br><br>
 Autokonfiguration är endast möjlig för företagets lokala nätverk, för telefoner <b>Yealink, Snom, Fanvil</b>.',
+    'mod_Autoprovision_phone_settings_title' => 'Telefon inställningar',
+    'mod_Autoprovision_phone_templates' => 'Inställningar mallar',
+    'mod_Autoprovision_general_settings' => 'URI-inställningar',
+    'mod_Autoprovision_pnp' => 'PnP-inställningar',
+    'mod_Autoprovision_addNew' => 'Lägg till',
+    'mod_Autoprovision_templates_uri_uri' => 'URI',
+    'mod_Autoprovision_templates_uri_template' => 'Prov',
+    'mod_Autoprovision_phone_settings_user' => 'Anställd',
+    'mod_Autoprovision_phone_settings_mac' => 'MAC-adress',
+    'mod_Autoprovision_template_name' => 'namn',
+    'mod_Autoprovision_search_tags' => 'Sök...',
+    'mod_Autoprovision_edit_template' => 'Redigera en mall',
+    'mod_Autoprovision_end_edit_template' => 'Slutför redigeringen',
+    'mod_Autoprovision_other_pbx' => 'Telefonbok',
+    'mod_Autoprovision_other_pbx_name' => 'Telefonväxelns namn',
+    'mod_Autoprovision_other_pbx_address' => 'PBX nätverksadress',
+    'mod_Autoprovision_templates_header' => 'När du beskriver en mall kan du använda följande parametrar: <b>{SIP_USER_NAME}</b> - anställds namn <b>{SIP_NUM}</b> - internt nummer (inloggning) <b>{SIP_PASS}</b> - lösenord',
+    'mod_Autoprovision_templates_users_header' => 'När du beskriver en MAC-adress är det tillåtet att använda symbolen <b>%</b> - vilket betyder "alla teckenuppsättningar" <br>
+Mallen <b>805e0c67%</b> matchar <b>805e0c670001</b> och <b>805e0c670002</b>',
 ];

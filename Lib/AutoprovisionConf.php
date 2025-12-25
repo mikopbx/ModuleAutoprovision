@@ -20,6 +20,8 @@ class AutoprovisionConf extends ConfigClass
     public const SIP_USER   = 'apv-miko-pbx';
     public const SIP_SECRET = 'apv-miko-pbx';
 
+    public const BASE_URI   = '/pbxcore/api/autoprovision-http';
+
     /**
      * Returns module workers to start it at WorkerSafeScript
      * @return array
@@ -99,10 +101,16 @@ class AutoprovisionConf extends ConfigClass
      */
     public function getPBXCoreRESTAdditionalRoutes(): array
     {
-        return [
-            [GetController::class, 'getConfig', '/pbxcore/api/autoprovision/getcfg', 'get', '/', true],
-            [GetController::class, 'getImg', '/pbxcore/api/autoprovision/getimg', 'get', '/', true],
+        $routes = [
+            [GetController::class, 'getConfig',      '/pbxcore/api/autoprovision/getcfg', 'get', '/', true],
+            [GetController::class, 'getImg',         '/pbxcore/api/autoprovision/getimg', 'get', '/', true],
         ];
+        $uri = "";
+        for ($i = 1; $i <= 35; $i++) {
+            $uri .= "/{p$i}";
+            $routes[] = [GetController::class, 'getConfigStatic', self::BASE_URI.$uri, 'get', '/', true];
+        }
+        return $routes;
     }
 
     /**

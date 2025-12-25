@@ -21,4 +21,23 @@ return [
 <br>要配置电话，您需要从电话呼叫“<b>%extension%</b>”，其中 XXX 是 PBX 上的内部号码。
 <br><br>
 自动配置仅适用于企业本地网络，电话<b>Yealink、Snom、Fanvil</b>。',
+    'mod_Autoprovision_phone_settings_title' => '手机设置',
+    'mod_Autoprovision_phone_templates' => '设置模板',
+    'mod_Autoprovision_general_settings' => 'URI 设置',
+    'mod_Autoprovision_pnp' => '即插即用设置',
+    'mod_Autoprovision_addNew' => '添加',
+    'mod_Autoprovision_templates_uri_uri' => '统一资源标识符',
+    'mod_Autoprovision_templates_uri_template' => '样本',
+    'mod_Autoprovision_phone_settings_user' => '员工',
+    'mod_Autoprovision_phone_settings_mac' => 'MAC地址',
+    'mod_Autoprovision_template_name' => '姓名',
+    'mod_Autoprovision_search_tags' => '搜索...',
+    'mod_Autoprovision_edit_template' => '编辑模板',
+    'mod_Autoprovision_end_edit_template' => '完成编辑',
+    'mod_Autoprovision_other_pbx' => '电话簿',
+    'mod_Autoprovision_other_pbx_name' => '电话交换机名称',
+    'mod_Autoprovision_other_pbx_address' => 'PBX 网络地址',
+    'mod_Autoprovision_templates_header' => '描述模板时，可以使用以下参数： <b>{SIP_USER_NAME}</b> - 员工姓名 <b>{SIP_NUM}</b> - 内部号码（登录） <b>{SIP_PASS}</b> - 密码',
+    'mod_Autoprovision_templates_users_header' => '描述 MAC 地址时，允许使用符号 <b>%</b> - 意思是“任何字符集”<br>
+模式 <b>805e0c67%</b> 将匹配 <b>805e0c670001</b> 和 <b>805e0c670002</b>',
 ];

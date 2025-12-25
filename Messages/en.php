@@ -21,4 +21,23 @@ return [
 <br>To configure the phone, you need to call "<b>%extension%</b>" from it, where XXX is the internal number on the PBX.
 <br><br>
 Autoconfiguration is possible only for the local network of the enterprise, for phones <b>Yealink, Snom, Fanvil</b>.',
+    'mod_Autoprovision_end_edit_template' => 'Finish editing',
+    'mod_Autoprovision_phone_settings_title' => 'Phone settings',
+    'mod_Autoprovision_phone_templates' => 'Settings templates',
+    'mod_Autoprovision_general_settings' => 'URI Settings',
+    'mod_Autoprovision_pnp' => 'PnP Settings',
+    'mod_Autoprovision_addNew' => 'Add',
+    'mod_Autoprovision_templates_uri_uri' => 'URI',
+    'mod_Autoprovision_templates_uri_template' => 'Sample',
+    'mod_Autoprovision_phone_settings_user' => 'Employee',
+    'mod_Autoprovision_phone_settings_mac' => 'MAC Address',
+    'mod_Autoprovision_template_name' => 'Name',
+    'mod_Autoprovision_search_tags' => 'Search...',
+    'mod_Autoprovision_edit_template' => 'Editing a template',
+    'mod_Autoprovision_other_pbx' => 'Phone book',
+    'mod_Autoprovision_other_pbx_name' => 'Name of the telephone exchange',
+    'mod_Autoprovision_other_pbx_address' => 'PBX network address',
+    'mod_Autoprovision_templates_header' => 'When describing a template, you can use the following parameters: <b>{SIP_USER_NAME}</b> - employee name <b>{SIP_NUM}</b> - internal number (login) <b>{SIP_PASS}</b> - password',
+    'mod_Autoprovision_templates_users_header' => 'When describing a MAC address, it is allowed to use the symbol <b>%</b> - meaning “any set of characters” <br>
+The template <b>805e0c67%</b> will match <b>805e0c670001</b> and <b>805e0c670002</b>',
 ];

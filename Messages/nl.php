@@ -38,4 +38,23 @@ Automatische configuratie is alleen mogelijk voor toestellen in hetzelfde lokale
  * Written by Alexey Portnov, 10 2019
  */
     'repModuleAutoprovision' => 'Module - %repesent%',
+    'mod_Autoprovision_phone_settings_title' => 'Telefoon instellingen',
+    'mod_Autoprovision_phone_templates' => 'Sjablonen voor instellingen',
+    'mod_Autoprovision_general_settings' => 'URI-instellingen',
+    'mod_Autoprovision_pnp' => 'PnP-instellingen',
+    'mod_Autoprovision_addNew' => 'Toevoegen',
+    'mod_Autoprovision_templates_uri_uri' => 'URI',
+    'mod_Autoprovision_templates_uri_template' => 'Steekproef',
+    'mod_Autoprovision_phone_settings_user' => 'Medewerker',
+    'mod_Autoprovision_phone_settings_mac' => 'Mac adres',
+    'mod_Autoprovision_template_name' => 'Naam',
+    'mod_Autoprovision_search_tags' => 'Zoekopdracht...',
+    'mod_Autoprovision_edit_template' => 'Een sjabloon bewerken',
+    'mod_Autoprovision_end_edit_template' => 'Voltooi het bewerken',
+    'mod_Autoprovision_other_pbx' => 'Telefoonboek',
+    'mod_Autoprovision_other_pbx_name' => 'Naam van de telefooncentrale',
+    'mod_Autoprovision_other_pbx_address' => 'PBX-netwerkadres',
+    'mod_Autoprovision_templates_header' => 'Bij het beschrijven van een sjabloon kunt u de volgende parameters gebruiken: <b>{SIP_USER_NAME}</b> - naam van de werknemer <b>{SIP_NUM}</b> - intern nummer (login) <b>{SIP_PASS}</b> - wachtwoord',
+    'mod_Autoprovision_templates_users_header' => 'Bij het beschrijven van een MAC-adres is het toegestaan om het symbool <b>%</b> te gebruiken, wat \'elke reeks tekens\' betekent <br>
+De sjabloon <b>805e0c67%</b> komt overeen met <b>805e0c670001</b> en <b>805e0c670002</b>',
 ];
