@@ -1,12 +1,17 @@
 <?php
-return [
-    /**
+
+declare(strict_types=1);
+/*
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
  * Proprietary and confidential
  * Written by Alexey Portnov, 10 2019
  */
-    'repModuleAutoprovision' => 'Autoprovision module - %repesent%',
+
+use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+
+return [
+    'repModuleAutoprovision' => 'Autoprovision module - %represent%',
     'mo_ModuleAutoprovision' => 'The autoprovision module',
     'BreadcrumbModuleAutoprovision' => 'The autoprovision module',
     'SubHeaderModuleAutoprovision' => 'Bulk ip-phones setup',
@@ -33,11 +38,17 @@ Autoconfiguration is possible only for the local network of the enterprise, for 
     'mod_Autoprovision_phone_settings_mac' => 'MAC Address',
     'mod_Autoprovision_template_name' => 'Name',
     'mod_Autoprovision_search_tags' => 'Search...',
+    'mod_Autoprovision_filter_posts' => 'Select…',
     'mod_Autoprovision_edit_template' => 'Editing a template',
     'mod_Autoprovision_other_pbx' => 'Phone book',
     'mod_Autoprovision_other_pbx_name' => 'Name of the telephone exchange',
     'mod_Autoprovision_other_pbx_address' => 'PBX network address',
+    'mod_Autoprovision_other_pbx_header' => '<b>Warning!</b> The phone book must be accessible on every PBX at the URI <b>'.AutoprovisionConf::BASE_URI.'/phonebook</b><br>
+List every address of the PBXes from which the phone book should be fetched.<br>',
     'mod_Autoprovision_templates_header' => 'When describing a template, you can use the following parameters: <b>{SIP_USER_NAME}</b> - employee name <b>{SIP_NUM}</b> - internal number (login) <b>{SIP_PASS}</b> - password',
-    'mod_Autoprovision_templates_users_header' => 'When describing a MAC address, it is allowed to use the symbol <b>%</b> - meaning “any set of characters” <br>
+    'mod_Autoprovision_templates_users_header' => 'When describing a MAC address, it is allowed to use the symbol <b>%</b> - meaning "any set of characters" <br>
 The template <b>805e0c67%</b> will match <b>805e0c670001</b> and <b>805e0c670002</b>',
+    'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>'.AutoprovisionConf::BASE_URI.'</b><br>
+When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
+The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
 ];

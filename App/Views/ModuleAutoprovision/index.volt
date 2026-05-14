@@ -13,7 +13,7 @@
           {{ t._('mod_Autoprovision_other_pbx_header') }}
       </div>
       <a id="add-new-other_pbx-button" class="ui blue button"><i class="add circle icon"></i>{{ t._('mod_Autoprovision_addNew') }}</a>
-      <table id="other_pbx" class="ui celled table">
+      <table id="other_pbx" class="ui celled table" data-table-key="other_pbx" data-model="OtherPBX">
         <thead><tr>
           <th>{{ t._('mod_Autoprovision_other_pbx_name') }}</th>
           <th>{{ t._('mod_Autoprovision_other_pbx_address') }}</th>
@@ -21,20 +21,20 @@
         </tr></thead>
         <tbody>
             {% for pbx in otherPBX %}
-            <tr id="{{ pbx['id'] }}"
+            <tr id="{{ pbx['id']|e }}"
               {% if loop.first %}
               style="display: none"
               {% endif %}
             >
-                <td data-label="name" data-id="{{ pbx['id'] }}">
-                    <div class="ui fluid mini icon input"><input type="text" name="other_pbx-name-{{ pbx['id'] }}" placeholder="" value="{{ pbx['name'] }}"></div>
+                <td data-label="name" data-id="{{ pbx['id']|e }}">
+                    <div class="ui fluid mini icon input"><input type="text" name="other_pbx-name-{{ pbx['id']|e }}" placeholder="" value="{{ pbx['name']|default('')|e }}"></div>
                 </td>
-                <td data-label="address" data-id="{{ pbx['id'] }}">
-                    <div class="ui fluid mini icon input"><input type="text" name="other_pbx-address-{{ pbx['id'] }}" placeholder="" value="{{ pbx['address'] }}"></div>
+                <td data-label="address" data-id="{{ pbx['id']|e }}">
+                    <div class="ui fluid mini icon input"><input type="text" name="other_pbx-address-{{ pbx['id']|e }}" placeholder="" value="{{ pbx['address']|default('')|e }}"></div>
                 </td>
                 <td data-label="actions" class="right aligned">
                     <div class="ui compact basic icon buttons action-buttons">
-                        <a href="#" onclick="moduleAutoprovision.removePbxRow('{{ pbx['id'] }}', this)"  class="ui button delete popuped two-steps-delete" data-content=""><i class="icon red trash"></i> 	</a>
+                        <a href="#" class="ui button delete popuped two-steps-delete remove-row" data-content=""><i class="icon red trash"></i> 	</a>
                     </div>
                 </td>
           </tr>
@@ -78,7 +78,7 @@
     <div class="ui bottom attached tab segment" data-tab="general-settings">
         <div class="ui message"> {{ t._('mod_Autoprovision_templates_uri_header') }}</div>
         <a id="add-new-templates_uri-button" class="ui blue button"><i class="add circle icon"></i>{{ t._('mod_Autoprovision_addNew') }}</a>
-        <table id="templates_uri" class="ui celled table">
+        <table id="templates_uri" class="ui celled table" data-table-key="templates_uri" data-model="TemplatesUri">
             <thead><tr>
               <th class="">{{ t._('mod_Autoprovision_templates_uri_uri') }}</th>
               <th class="four wide">{{ t._('mod_Autoprovision_templates_uri_template') }}</th>
@@ -86,17 +86,17 @@
             </tr></thead>
             <tbody>
               {% for template in templatesUri %}
-              <tr id="{{ template['id'] }}"
+              <tr id="{{ template['id']|e }}"
                 {% if loop.first %}
                 style="display: none"
                 {% endif %}
               >
-                <td data-label="uri" data-id="{{ template['id'] }}">
-                    <div class="ui fluid mini icon input"><input type="text"  name="templates_uri-uri-{{ template['id'] }}" placeholder="" value="{{ template['uri'] }}"></div>
+                <td data-label="uri" data-id="{{ template['id']|e }}">
+                    <div class="ui fluid mini icon input"><input type="text"  name="templates_uri-uri-{{ template['id']|e }}" placeholder="" value="{{ template['uri']|default('')|e }}"></div>
                 </td>
-                <td data-label="template" data-id="{{ template['id'] }}">
+                <td data-label="template" data-id="{{ template['id']|e }}">
                     <div class="ui dropdown">
-                      <input type="hidden" name="templates_uri-templateId-{{ template['id'] }}" value="{{ template['templateId'] }}">
+                      <input type="hidden" name="templates_uri-templateId-{{ template['id']|e }}" value="{{ template['templateId']|default('')|e }}">
                       <i class="file alternate icon"></i>
                       <span class="text">{{ t._('mod_Autoprovision_filter_posts') }}</span>
                       <div class="menu">
@@ -107,7 +107,7 @@
                         <div class="divider"></div>
                         <div class="scrolling menu">
                           {% for pattern in templates %}
-                          <div class="item" data-value="{{ pattern['id'] }}">{{ pattern['name'] }}</div>
+                          <div class="item" data-value="{{ pattern['id']|e }}">{{ pattern['name']|default('')|e }}</div>
                           {% endfor %}
                         </div>
                       </div>
@@ -115,7 +115,7 @@
                 </td>
                 <td data-label="actions" class="right aligned">
                     <div class="ui compact basic icon buttons action-buttons">
-                        <a href="#" onclick="moduleAutoprovision.removeUriTemplate('{{ template['id'] }}', this)"  class="ui button delete popuped two-steps-delete" data-content=""><i class="icon red trash"></i> 	</a>
+                        <a href="#" class="ui button delete popuped two-steps-delete remove-row" data-content=""><i class="icon red trash"></i> 	</a>
                     </div>
                 </td>
               </tr>
@@ -127,7 +127,7 @@
       <div class="ui message"> {{ t._('mod_Autoprovision_templates_users_header') }}</div>
 
       <a id="add-new-phone_settings-button" class="ui blue button"><i class="add circle icon"></i>{{ t._('mod_Autoprovision_addNew') }}</a>
-      <table id="phone_settings" class="ui celled table">
+      <table id="phone_settings" class="ui celled table" data-table-key="phone_settings" data-model="TemplatesUsers">
         <thead><tr>
           <th class="">{{ t._('mod_Autoprovision_phone_settings_user') }}</th>
           <th class="four wide">{{ t._('mod_Autoprovision_phone_settings_mac') }}</th>
@@ -136,14 +136,14 @@
         </tr></thead>
         <tbody>
           {% for template in templatesUsers %}
-          <tr id="{{ template['id'] }}"
+          <tr id="{{ template['id']|e }}"
             {% if loop.first %}
             style="display: none"
             {% endif %}
           >
-            <td data-label="user" data-id="{{ template['id'] }}">
+            <td data-label="user" data-id="{{ template['id']|e }}">
                 <div class="ui dropdown">
-                  <input type="hidden" name="phone_settings-userId-{{ template['id'] }}" value="{{ template['userId'] }}">
+                  <input type="hidden" name="phone_settings-userId-{{ template['id']|e }}" value="{{ template['userId']|default('')|e }}">
                   <i class="user icon"></i>
                   <span class="text">{{ t._('mod_Autoprovision_filter_posts') }}</span>
                   <div class="menu">
@@ -155,18 +155,18 @@
                     <div class="scrolling menu">
                       <div class="item" data-value="">{{ t._('mod_Autoprovision_filter_posts') }}</div>
                       {% for user in users %}
-                      <div class="item" data-value="{{ user['userid'] }}">{{ user['number'] }} "{{ user['callerid'] }} "</div>
+                      <div class="item" data-value="{{ user['userid']|e }}">{{ user['number']|default('')|e }} "{{ user['callerid']|default('')|e }} "</div>
                       {% endfor %}
                     </div>
                   </div>
                 </div>
             </td>
-            <td data-label="mac" data-id="{{ template['id'] }}">
-                <div class="ui fluid mini icon input"><input type="text"  name="phone_settings-mac-{{ template['id'] }}" placeholder="" value="{{ template['mac'] }}"></div>
+            <td data-label="mac" data-id="{{ template['id']|e }}">
+                <div class="ui fluid mini icon input"><input type="text"  name="phone_settings-mac-{{ template['id']|e }}" placeholder="" value="{{ template['mac']|default('')|e }}"></div>
             </td>
-            <td data-label="template" data-id="{{ template['id'] }}">
+            <td data-label="template" data-id="{{ template['id']|e }}">
                 <div class="ui dropdown">
-                  <input type="hidden" name="phone_settings-templateId-{{ template['id'] }}" value="{{ template['templateId'] }}">
+                  <input type="hidden" name="phone_settings-templateId-{{ template['id']|e }}" value="{{ template['templateId']|default('')|e }}">
                   <i class="file alternate icon"></i>
                   <span class="text">{{ t._('mod_Autoprovision_filter_posts') }}</span>
                   <div class="menu">
@@ -177,7 +177,7 @@
                     <div class="divider"></div>
                     <div class="scrolling menu">
                       {% for pattern in templates %}
-                      <div class="item" data-value="{{ pattern['id'] }}">{{ pattern['name'] }}</div>
+                      <div class="item" data-value="{{ pattern['id']|e }}">{{ pattern['name']|default('')|e }}</div>
                       {% endfor %}
                     </div>
                   </div>
@@ -185,7 +185,7 @@
             </td>
             <td data-label="actions" class="right aligned">
                 <div class="ui compact basic icon buttons action-buttons">
-                    <a href="#" onclick="moduleAutoprovision.removeUserTemplate('{{ template['id'] }}', this)"  class="ui button delete popuped two-steps-delete" data-content=""><i class="icon red trash"></i> 	</a>
+                    <a href="#" class="ui button delete popuped two-steps-delete remove-row" data-content=""><i class="icon red trash"></i> 	</a>
                 </div>
             </td>
           </tr>
@@ -198,7 +198,7 @@
       <div class="ui message"> {{ t._('mod_Autoprovision_templates_header') }}</div>
 
       <a id="add-new-template-button" class="ui blue button"><i class="add circle icon"></i>{{ t._('mod_Autoprovision_addNew') }}</a>
-      <table id="templates" class="ui celled table">
+      <table id="templates" class="ui celled table" data-table-key="templates" data-model="Templates">
         <thead><tr>
           <th>{{ t._('mod_Autoprovision_template_name') }}</th>
           <th class="four wide" style="display: none"></th>
@@ -206,22 +206,22 @@
         </tr></thead>
         <tbody>
             {% for template in templates %}
-            <tr id="{{ template['id'] }}"
+            <tr id="{{ template['id']|e }}"
               {% if loop.first %}
               style="display: none"
               {% endif %}
             >
-                <td data-label="name" data-id="{{ template['id'] }}">
-                    <div class="ui fluid mini icon input"><input type="text" name="templates-name-{{ template['id'] }}" placeholder="" value="{{ template['name'] }}"></div>
+                <td data-label="name" data-id="{{ template['id']|e }}">
+                    <div class="ui fluid mini icon input"><input type="text" name="templates-name-{{ template['id']|e }}" placeholder="" value="{{ template['name']|default('')|e }}"></div>
                 </td>
-                <td data-label="template" data-id="{{ template['id'] }}" class="right aligned" style="display: none">
-                    <textarea name="templates-template-{{ template['id'] }}" >{{ template['template'] }}</textarea>
-                    <div class="ui modal segment" data-id="{{ template['id'] }}" data-id-table="templates">
+                <td data-label="template" data-id="{{ template['id']|e }}" class="right aligned" style="display: none">
+                    <textarea name="templates-template-{{ template['id']|e }}" >{{ template['template']|default('')|e }}</textarea>
+                    <div class="ui modal segment" data-id="{{ template['id']|e }}" data-id-table="templates">
                       <i class="close icon"></i>
                         <div class="ui form">
                           <div class="field">
                             <label>{{ t._('mod_Autoprovision_edit_template') }}</label>
-                            <textarea>{{ template['template'] }}</textarea>
+                            <textarea>{{ template['template']|default('')|e }}</textarea>
                           </div>
                         </div>
                       <div class="actions">
@@ -234,8 +234,8 @@
                 </td>
                 <td data-label="actions" class="right aligned">
                     <div class="ui compact basic icon buttons action-buttons">
-                        <a href="#" onclick="moduleAutoprovision.showTemplateOptions('{{ template['id'] }}', this)"  class="ui button delete popuped two-steps-delete" data-content=""><i class="icon cog"></i> 	</a>
-                        <a href="#" onclick="moduleAutoprovision.removeTemplate('{{ template['id'] }}', this)"  class="ui button delete popuped two-steps-delete" data-content=""><i class="icon red trash"></i> 	</a>
+                        <a href="#" class="ui button popuped show-template-options" data-content=""><i class="icon cog"></i> 	</a>
+                        <a href="#" class="ui button delete popuped two-steps-delete remove-row" data-content=""><i class="icon red trash"></i> 	</a>
                     </div>
                 </td>
           </tr>

@@ -1,5 +1,7 @@
 <?php
-/**
+
+declare(strict_types=1);
+/*
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
  * Proprietary and confidential
@@ -11,11 +13,10 @@ namespace Modules\ModuleAutoprovision\Models;
 use MikoPBX\Modules\Models\ModulesModelsBase;
 
 /**
- * Шаблоны конфиг файлов можно найти по ссылке.
+ * Per-user/per-MAC binding to a provisioning template.
  */
 class TemplatesUsers extends ModulesModelsBase
 {
-
     /**
      * @Primary
      * @Identity
@@ -24,26 +25,19 @@ class TemplatesUsers extends ModulesModelsBase
     public $id;
 
     /**
-     *
      * @Column(type="string", nullable=true)
      */
     public $userId;
 
     /**
-     *
      * @Column(type="string", nullable=true)
      */
     public $mac;
 
     /**
-     *
      * @Column(type="string", nullable=true)
      */
     public $templateId;
-
-    public static function getDynamicRelations(&$calledModelObject): void
-    {
-    }
 
     public function initialize(): void
     {

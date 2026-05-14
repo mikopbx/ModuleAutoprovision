@@ -1,4 +1,14 @@
 <?php
+
+declare(strict_types=1);
+/*
+ * Copyright © MIKO LLC - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+
 return [
     'mod_Autoprovision_additional_params' => 'Opções extras',
     'mod_Autoprovision_mac_white' => 'Lista de permissões de endereços MAC de telefone',
@@ -8,13 +18,7 @@ return [
     'SubHeaderModuleAutoprovision' => 'Ajuda na configuração de telefones SIP',
     'BreadcrumbModuleAutoprovision' => 'Auto Provisionamento',
     'mo_ModuleAutoprovision' => 'Auto Provisionamento',
-    /**
- * Copyright © MIKO LLC - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited
- * Proprietary and confidential
- * Written by Alexey Portnov, 10 2019
- */
-    'repModuleAutoprovision' => 'Módulo -% repesent%',
+    'repModuleAutoprovision' => 'Módulo -% represent%',
     'mod_Autoprovision_header' => 'Se o módulo estiver habilitado, a conta SIP "<b>apv-miko-pbx</b>" fica disponível no PBX.
 <br>Para configurar seu telefone automaticamente, você precisa redefini-lo para as configurações de fábrica.
 <br>Se o telefone se conectar ao PBX pela primeira vez, ele será registrado na conta "<b>apv-miko-pbx</b>".
@@ -40,4 +44,10 @@ A configuração automática é possível apenas para a rede local da empresa, p
     'mod_Autoprovision_templates_header' => 'Ao descrever um modelo, você pode usar os seguintes parâmetros: <b>{SIP_USER_NAME}</b> - nome do funcionário <b>{SIP_NUM}</b> - número interno (login) <b>{SIP_PASS}</b> - senha',
     'mod_Autoprovision_templates_users_header' => 'Ao descrever um endereço MAC, é permitido usar o símbolo <b>%</b> - que significa “qualquer conjunto de caracteres” <br>
 O modelo <b>805e0c67%</b> corresponderá a <b>805e0c670001</b> e <b>805e0c670002</b>',
+    'mod_Autoprovision_filter_posts' => 'Select…',
+    'mod_Autoprovision_other_pbx_header' => '<b>Warning!</b> The phone book must be accessible on every PBX at the URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br>
+List every address of the PBXes from which the phone book should be fetched.<br>',
+    'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>/pbxcore/api/autoprovision-http</b><br>
+When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
+The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
 ];

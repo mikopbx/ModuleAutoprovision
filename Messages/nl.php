@@ -1,4 +1,14 @@
 <?php
+
+declare(strict_types=1);
+/*
+ * Copyright © MIKO LLC - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+
 return [
     'mod_Autoprovision_header' => 'Als de module is ingeschakeld, wordt het SIP-account "<b>apv-miko-pbx</b>" beschikbaar op de PBX.
 <br>Als u uw telefoon automatisch wilt configureren, moet u deze terugzetten naar de fabrieksinstellingen.
@@ -14,30 +24,7 @@ Automatische configuratie is alleen mogelijk voor toestellen in hetzelfde lokale
     'SubHeaderModuleAutoprovision' => 'Bulk IP-telefoon installatie',
     'BreadcrumbModuleAutoprovision' => 'Autoprovision module',
     'mo_ModuleAutoprovision' => 'Autoprovision module',
-    /*
- * MikoPBX - free phone system for small business
- * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program.
- * If not, see <https://www.gnu.org/licenses/>.
- */
-    /**
- * Copyright © MIKO LLC - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited
- * Proprietary and confidential
- * Written by Alexey Portnov, 10 2019
- */
-    'repModuleAutoprovision' => 'Module - %repesent%',
+    'repModuleAutoprovision' => 'Module - %represent%',
     'mod_Autoprovision_phone_settings_title' => 'Telefoon instellingen',
     'mod_Autoprovision_phone_templates' => 'Sjablonen voor instellingen',
     'mod_Autoprovision_general_settings' => 'URI-instellingen',
@@ -57,4 +44,10 @@ Automatische configuratie is alleen mogelijk voor toestellen in hetzelfde lokale
     'mod_Autoprovision_templates_header' => 'Bij het beschrijven van een sjabloon kunt u de volgende parameters gebruiken: <b>{SIP_USER_NAME}</b> - naam van de werknemer <b>{SIP_NUM}</b> - intern nummer (login) <b>{SIP_PASS}</b> - wachtwoord',
     'mod_Autoprovision_templates_users_header' => 'Bij het beschrijven van een MAC-adres is het toegestaan om het symbool <b>%</b> te gebruiken, wat \'elke reeks tekens\' betekent <br>
 De sjabloon <b>805e0c67%</b> komt overeen met <b>805e0c670001</b> en <b>805e0c670002</b>',
+    'mod_Autoprovision_filter_posts' => 'Select…',
+    'mod_Autoprovision_other_pbx_header' => '<b>Warning!</b> The phone book must be accessible on every PBX at the URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br>
+List every address of the PBXes from which the phone book should be fetched.<br>',
+    'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>/pbxcore/api/autoprovision-http</b><br>
+When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
+The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
 ];

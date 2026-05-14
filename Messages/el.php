@@ -1,16 +1,20 @@
 <?php
+
+declare(strict_types=1);
+/*
+ * Copyright © MIKO LLC - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+
 return [
     'mod_Autoprovision_additional_params' => 'Επιπλέον επιλογές',
     'mod_Autoprovision_mac_white' => 'Λευκή λίστα διευθύνσεων MAC τηλεφώνου',
     'mod_Autoprovision_mac_black' => 'Μαύρη λίστα MAC τηλεφώνου',
     'mod_Autoprovision_pbx_host' => 'Διεύθυνση διακομιστή για εγγραφή τηλεφώνου',
     'mod_Autoprovision_Extension' => 'Πρότυπο επέκτασης',
-    /**
- * Copyright © MIKO LLC - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited
- * Proprietary and confidential
- * Written by Alexey Portnov, 10 2019
- */
     'repModuleAutoprovision' => 'Ενότητα Autoprovision',
     'SubHeaderModuleAutoprovision' => 'Βοήθεια στη ρύθμιση τηλεφώνων SIP',
     'BreadcrumbModuleAutoprovision' => 'Μονάδα αυτόματης διαμόρφωσης τηλεφώνου',
@@ -40,4 +44,10 @@ return [
     'mod_Autoprovision_templates_header' => 'Κατά την περιγραφή ενός προτύπου, μπορείτε να χρησιμοποιήσετε τις ακόλουθες παραμέτρους: <b>{SIP_USER_NAME}</b> - όνομα υπαλλήλου <b>{SIP_NUM}</b> - εσωτερικός αριθμός (είσοδος) <b>{SIP_PASS}</b> - κωδικός πρόσβασης',
     'mod_Autoprovision_templates_users_header' => 'Κατά την περιγραφή μιας διεύθυνσης MAC, επιτρέπεται η χρήση του συμβόλου <b>%</b> - που σημαίνει "οποιοδήποτε σύνολο χαρακτήρων" <br>
 Το πρότυπο <b>805e0c67%</b> θα ταιριάζει με <b>805e0c670001</b> και <b>805e0c670002</b>',
+    'mod_Autoprovision_filter_posts' => 'Select…',
+    'mod_Autoprovision_other_pbx_header' => '<b>Warning!</b> The phone book must be accessible on every PBX at the URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br>
+List every address of the PBXes from which the phone book should be fetched.<br>',
+    'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>/pbxcore/api/autoprovision-http</b><br>
+When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
+The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
 ];

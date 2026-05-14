@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /*
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
@@ -20,102 +22,119 @@ use Phalcon\Di\Injectable;
 
 class Autoprovision extends Injectable
 {
-
-    protected $tempDir;
-    protected $mikoPBXConfig;
+    protected string $tempDir;
+    protected MikoPBXConfig $mikoPBXConfig;
 
     public function __construct()
     {
-        $this->tempDir    = $this->di->getShared('config')->path('core.tempDir');
-        $this->mikoPBXConfig    = new MikoPBXConfig();
+        $this->tempDir       = (string)$this->di->getShared('config')->path('core.tempDir');
+        $this->mikoPBXConfig = new MikoPBXConfig();
     }
 
     /**
-     * Создание конфига телефона.
+     * Generates the vendor-specific provisioning config file for the phone identified by $req_data['mac'].
      *
-     * @param $req_data
-     *
-     * @return string
+     * @param array $req_data Provisioning request payload (must include 'mac' and 'vendor').
+     * @return string Absolute path to the generated config, or '' if the phone is unknown.
      */
-    public function generateConfigPhone($req_data): string
+    public function generateConfigPhone(array $req_data): string
     {
-        $phone_data = ModuleAutoprovisionDevice::findFirst("mac='{$req_data['mac']}'");
-        if ($phone_data === null) {
+        $mac = (string)($req_data['mac'] ?? '');
+        if ($mac === '') {
             return '';
         }
-        $sip_data  = [];
-        $user_data = ModuleAutoprovisionUsers::find("id_phone='{$phone_data->id}'");
-        foreach ($user_data as $data) {
-            $exten = Extensions::findFirst("userid='{$data->userid}' AND type='SIP'");
-            if ($exten !== null) {
-                $sip = Sip::findFirst("extension='$exten->number'");
-                if ($sip !== null) {
-                    $sip_data[$data->line] = [
-                        'extension' => $sip->extension,
-                        'secret'    => $sip->secret,
-                        'callerid'  => $exten->callerid,
-                    ];
-                }
-            }
+
+        $phoneData = ModuleAutoprovisionDevice::findFirst([
+            'mac = :mac:',
+            'bind' => ['mac' => $mac],
+        ]);
+        if ($phoneData === null) {
+            return '';
         }
-        if (empty($sip_data)) {
-            $def_peer      = [
+
+        $sipData  = [];
+        $userData = ModuleAutoprovisionUsers::find([
+            'id_phone = :id_phone:',
+            'bind' => ['id_phone' => $phoneData->id],
+        ]);
+        foreach ($userData as $row) {
+            $exten = Extensions::findFirst([
+                'userid = :userid: AND type = :type:',
+                'bind' => ['userid' => $row->userid, 'type' => 'SIP'],
+            ]);
+            if ($exten === null) {
+                continue;
+            }
+            $sip = Sip::findFirst([
+                'extension = :extension:',
+                'bind' => ['extension' => $exten->number],
+            ]);
+            if ($sip === null) {
+                continue;
+            }
+            $sipData[$row->line] = [
+                'extension' => $sip->extension,
+                'secret'    => $sip->secret,
+                'callerid'  => $exten->callerid,
+            ];
+        }
+
+        if (empty($sipData)) {
+            $defPeer = [
                 'extension' => AutoprovisionConf::SIP_USER,
-                'secret'    => AutoprovisionConf::SIP_SECRET,
+                'secret'    => AutoprovisionConf::getSipSecret(),
                 'callerid'  => AutoprovisionConf::SIP_USER,
             ];
-            $sip_data['1'] = $def_peer;
-            if ($req_data['model'] === 'W52P') {
-                // DECT база. Тут настройка особенная, несколько SIP аккаунтов - 5шт.
-                $sip_data['2'] = $def_peer;
-                $sip_data['3'] = $def_peer;
-                $sip_data['4'] = $def_peer;
-                $sip_data['5'] = $def_peer;
+            $sipData['1'] = $defPeer;
+            if (($req_data['model'] ?? '') === 'W52P') {
+                // W52P DECT base station: configure 5 SIP accounts using the default peer.
+                $sipData['2'] = $defPeer;
+                $sipData['3'] = $defPeer;
+                $sipData['4'] = $defPeer;
+                $sipData['5'] = $defPeer;
             }
         }
-        switch ($req_data['vendor']) {
-            case 'yealink':
-                $confManager = new AutoprovisionYealink();
-                break;
-            case 'fanvil':
-                $confManager = new AutoprovisionFanvil();
-                break;
-            case 'snom':
-                $confManager = new AutoprovisionSnom();
-                break;
-            default:
-                return '';
+
+        $confManager = match ($req_data['vendor'] ?? '') {
+            'yealink' => new AutoprovisionYealink(),
+            'fanvil'  => new AutoprovisionFanvil(),
+            'snom'    => new AutoprovisionSnom(),
+            default   => null,
+        };
+        if ($confManager === null) {
+            return '';
         }
 
-        return $confManager->generateConfig($req_data, $sip_data);
+        return $confManager->generateConfig($req_data, $sipData);
     }
 
-
-
     /**
-     * Отправка запроса NOTIFY на телефон.
-     *
-     * @param $ip_phone
-     * @param $port_phone
-     * @param $eth
+     * Sends a SIP NOTIFY with Event: check-sync;reboot=true to the given phone.
      */
-    public function clientNotifyReboot($ip_phone, $port_phone, $eth): void
+    public function clientNotifyReboot(string $ipPhone, int $portPhone, string $eth): void
     {
+        if (!filter_var($ipPhone, FILTER_VALIDATE_IP) || $portPhone <= 0 || $portPhone > 65535) {
+            return;
+        }
+
         $sock = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+        if ($sock === false) {
+            return;
+        }
 
-        $net        = new Network();
-        $eth        = $net->getInterface($eth);
-        $ip_pbx     = $eth['ipaddr'];
-        $port_pbx   = $this->mikoPBXConfig->getGeneralSettings('SIPPort');
-        $phone_user = AutoprovisionConf::SIP_USER;
+        $net          = new Network();
+        $ethInterface = $net->getInterface($eth);
+        $ipPbx        = (string)($ethInterface['ipaddr'] ?? '');
+        $portPbx      = (string)$this->mikoPBXConfig->getGeneralSettings('SIPPort');
+        $phoneUser    = AutoprovisionConf::SIP_USER;
 
-        $msg = "NOTIFY sip:{$phone_user}@{$ip_phone}:{$port_phone};ob SIP/2.0\r\n" .
-            "Via: SIP/2.0/UDP {$ip_pbx}:{$port_pbx};branch=z9hG4bK12fd4e5c;rport\r\n" .
+        $msg = "NOTIFY sip:{$phoneUser}@{$ipPhone}:{$portPhone};ob SIP/2.0\r\n" .
+            "Via: SIP/2.0/UDP {$ipPbx}:{$portPbx};branch=z9hG4bK12fd4e5c;rport\r\n" .
             "Max-Forwards: 70\r\n" .
-            "From: \"asterisk\" <sip:asterisk@{$ip_pbx}>;tag=as54cd2be9\r\n" .
-            "To: <sip:{$phone_user}@{$ip_phone}:{$port_phone};ob>\r\n" .
-            "Contact: <sip:asterisk@{$ip_pbx}:{$port_pbx}>\r\n" .
-            "Call-ID: 4afab6ce2bff0be11a4af41064340242@{$ip_pbx}:{$port_pbx}>\r\n" .
+            "From: \"asterisk\" <sip:asterisk@{$ipPbx}>;tag=as54cd2be9\r\n" .
+            "To: <sip:{$phoneUser}@{$ipPhone}:{$portPhone};ob>\r\n" .
+            "Contact: <sip:asterisk@{$ipPbx}:{$portPbx}>\r\n" .
+            "Call-ID: 4afab6ce2bff0be11a4af41064340242@{$ipPbx}:{$portPbx}\r\n" .
             "CSeq: 102 NOTIFY\r\n" .
             "User-Agent: mikopbx\r\n" .
             "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, SUBSCRIBE, NOTIFY, INFO, PUBLISH, MESSAGE\r\n" .
@@ -124,108 +143,126 @@ class Autoprovision extends Injectable
             "Event: check-sync;reboot=true\r\n" .
             "Content-Length: 0\r\n\n";
 
-        $len = strlen($msg);
-        socket_sendto($sock, $msg, $len, 0, $ip_phone, $port_phone);
+        socket_sendto($sock, $msg, strlen($msg), 0, $ipPhone, $portPhone);
         socket_close($sock);
     }
 
     /**
-     * AGI скрипт для запроса настройки телефона.
+     * AGI handler executed by the autoprovision dialplan context.
+     * Looks up the calling phone, binds its MAC to the dialing extension,
+     * and triggers a reboot so the phone re-fetches its config.
      */
     public function StartAGIProvision(): void
     {
         $agi = new AGI();
-        $row = $agi->get_variable('PT1C_VIA', true);
-        preg_match_all('/\d+.\d+.\d+.\d+:?\d*/m', $row, $matches, PREG_SET_ORDER);
-        if (!empty($matches) && count($matches[0]) === 1) {
-            $res = explode(':', $matches[0][0]);
-            [$ip, $port] = $res;
-
-            $tmp_data = explode('*', $agi->request['agi_extension']);
-            $sip_id   = array_pop($tmp_data);
-            $agi->noop("{$agi->request['agi_extension']}  $sip_id");
-            /** @var  \MikoPBX\Common\Models\Extensions; $exten */
-            $exten = Extensions::findFirst("number='{$sip_id}'");
-            if ($exten === null) {
-                $agi->set_variable('PROVISION_STATUS', 'EXTEN_NOT_FOUND');
-                return;
-            }
-
-            $phone_data = null;
-            exec("timeout -t 1 ping {$ip} -c 1");
-            // Анализируем MAC адрес устройства.
-            $arp = Util::which('arp');
-            $awk = Util::which('awk');
-            exec("$arp -D {$ip} -n | $awk  '{ print $4 \" \" $7}' 2>&1", $out);
-
-            [$mac, $eth] = explode(' ', $out[0] ?? '');
-            $mac = str_replace(':', '', $mac);
-            // Телефон мог сменить ip адрес. Попробуем получить его из ARP таблицы.
-            $agi->noop('arp - ' . implode('', $out) . '.');
-            if ( ! empty($eth)) {
-                /** @var ModuleAutoprovisionDevice $phone_data */
-                // Ищем по mac адресу.
-                $phone_data = ModuleAutoprovisionDevice::findFirst("mac='{$mac}'");
-            }
-            $agi->noop("eth - {$eth}; mac - {$mac}");
-            if ( ! $phone_data) {
-                // Ищем по IP адресу.
-                $phone_data = ModuleAutoprovisionDevice::findFirst("host='{$ip}'");
-            }
-
-            if ($phone_data !== null && ! empty($phone_data->mac)) {
-                if (false !== stripos($phone_data->manufacturer_model, 'W52P')) {
-                    // Для DECT трубки определим номер линии из заголовка Call-ID.
-                    $call_id = $agi->get_variable('SIP_HEADER(Call-ID)', true);
-                    $agi->noop("call_id - $call_id.");
-                    // Номер линии находится до символа "_"
-                    // 0_47643482@172.16.32.59
-                    $params = explode(' ', $call_id);
-                    // Нумерация линий начинается с 0.
-                    $line = (count($params) > 1) ? ($params[0] + 1) : 1;
-                } else {
-                    $line = 1;
-                }
-                $Auto_Provision_User = ModuleAutoprovisionUsers::findFirst(
-                    "id_phone={$phone_data->id} AND line='{$line}'"
-                );
-                if ($Auto_Provision_User === null) {
-                    $Auto_Provision_User           = new ModuleAutoprovisionUsers();
-                    $Auto_Provision_User->id_phone = $phone_data->id;
-                }
-                $Auto_Provision_User->line   = $line;
-                $Auto_Provision_User->userid = $exten->userid;
-                $Auto_Provision_User->save();
-
-                $agi->set_variable('PROVISION_STATUS', 'OK');
-
-                // Тут все ОК, нужно перезагрузить телефон.
-                $this->clientNotifyReboot($ip, $port, $eth);
-            } else {
-                // Записать в syslog. Обработать fail2ban.
-                $agi->set_variable('PROVISION_STATUS', 'PHONE_NOT_FOUND');
-            }
+        $row = (string)$agi->get_variable('PT1C_VIA', true);
+        // Match an IPv4 address with an optional :port suffix. The dot is escaped properly.
+        preg_match_all('/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):?(\d*)/m', $row, $matches);
+        if (empty($matches[1][0])) {
+            return;
         }
+        $ip   = $matches[1][0];
+        $port = (int)($matches[2][0] ?: 0);
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            return;
+        }
+
+        $agiExtension = (string)($agi->request['agi_extension'] ?? '');
+        $tmpData      = explode('*', $agiExtension);
+        $sipId        = (string)array_pop($tmpData);
+        $agi->noop("{$agiExtension}  {$sipId}");
+
+        $exten = Extensions::findFirst([
+            'number = :number:',
+            'bind' => ['number' => $sipId],
+        ]);
+        if ($exten === null) {
+            $agi->set_variable('PROVISION_STATUS', 'EXTEN_NOT_FOUND');
+            return;
+        }
+
+        // Populate ARP table by pinging the phone (escape the IP to avoid shell injection).
+        $safeIp = escapeshellarg($ip);
+        exec("timeout -t 1 ping {$safeIp} -c 1");
+
+        $arp = Util::which('arp');
+        $awk = Util::which('awk');
+        exec("{$arp} -D {$safeIp} -n | {$awk}  '{ print \$4 \" \" \$7}' 2>&1", $out);
+
+        [$mac, $eth] = array_pad(explode(' ', $out[0] ?? ''), 2, '');
+        $mac = str_replace(':', '', $mac);
+        $agi->noop('arp - ' . implode('', $out) . '.');
+
+        $phoneData = null;
+        if ($eth !== '' && $mac !== '') {
+            $phoneData = ModuleAutoprovisionDevice::findFirst([
+                'mac = :mac:',
+                'bind' => ['mac' => $mac],
+            ]);
+        }
+        $agi->noop("eth - {$eth}; mac - {$mac}");
+        if ($phoneData === null) {
+            // The phone may have changed its IP — fall back to ARP-table lookup by host.
+            $phoneData = ModuleAutoprovisionDevice::findFirst([
+                'host = :host:',
+                'bind' => ['host' => $ip],
+            ]);
+        }
+
+        if ($phoneData === null || empty($phoneData->mac)) {
+            // Log and let fail2ban handle repeated provisioning attempts from unknown phones.
+            $agi->set_variable('PROVISION_STATUS', 'PHONE_NOT_FOUND');
+            return;
+        }
+
+        if (stripos((string)$phoneData->manufacturer_model, 'W52P') !== false) {
+            // For a DECT handset, the line number comes from the Call-ID header.
+            $callId = (string)$agi->get_variable('SIP_HEADER(Call-ID)', true);
+            $agi->noop("call_id - {$callId}.");
+            // Line numbers start at 0 — Call-ID format: "0_47643482@172.16.32.59".
+            $params = explode(' ', $callId);
+            $line   = (count($params) > 1) ? ((int)$params[0] + 1) : 1;
+        } else {
+            $line = 1;
+        }
+
+        $provUser = ModuleAutoprovisionUsers::findFirst([
+            'id_phone = :id_phone: AND line = :line:',
+            'bind' => ['id_phone' => $phoneData->id, 'line' => (string)$line],
+        ]);
+        if ($provUser === null) {
+            $provUser           = new ModuleAutoprovisionUsers();
+            $provUser->id_phone = $phoneData->id;
+        }
+        $provUser->line   = (string)$line;
+        $provUser->userid = $exten->userid;
+        $provUser->save();
+
+        $agi->set_variable('PROVISION_STATUS', 'OK');
+
+        // Reboot the phone so it pulls the freshly generated config.
+        $this->clientNotifyReboot($ip, $port, $eth);
     }
 
-
     /**
-     * Разбор INI конфига
+     * Parses an INI-like blob of vendor-specific overrides keyed by section name.
      *
-     * @param $manual_attributes
+     * The input may be base64-encoded. We only treat it as base64 when the strict_types
+     * round-trip succeeds and the decoded payload contains an INI section marker — otherwise
+     * arbitrary base64-shaped strings would be silently rewritten.
      *
-     * @return array
+     * @param string $manualAttributes Either raw INI text or its base64-encoded form.
+     * @return array<string, string> Map of section name to raw section body.
      */
-    public static function parseIniSettings($manual_attributes): array
+    public static function parseIniSettings(string $manualAttributes): array
     {
-        $tmp_data = base64_decode($manual_attributes);
-        if (base64_encode($tmp_data) === $manual_attributes) {
-            $manual_attributes = $tmp_data;
+        $decoded = base64_decode($manualAttributes, true);
+        if ($decoded !== false && base64_encode($decoded) === $manualAttributes && str_contains($decoded, '[')) {
+            $manualAttributes = $decoded;
         }
-        unset($tmp_data);
-        // TRIMMING
-        $tmp_arr = explode("\n", $manual_attributes);
-        foreach ($tmp_arr as &$row) {
+
+        $tmpArr = explode("\n", $manualAttributes);
+        foreach ($tmpArr as &$row) {
             $row = trim($row);
             $pos = strpos($row, ']');
             if ($pos !== false && strpos($row, '[') === 0) {
@@ -233,20 +270,19 @@ class Autoprovision extends Injectable
             }
         }
         unset($row);
-        $manual_attributes = implode("\n", $tmp_arr);
-        // TRIMMING END
+        $manualAttributes = implode("\n", $tmpArr);
 
-        $manual_data = [];
-        $sections    = explode("\n[", str_replace(']', '', $manual_attributes));
+        $manualData = [];
+        $sections   = explode("\n[", str_replace(']', '', $manualAttributes));
         foreach ($sections as $section) {
-            $data_rows    = explode("\n", trim($section));
-            $section_name = trim($data_rows[0] ?? '');
-            if ( ! empty($section_name)) {
-                unset($data_rows[0]);
-                $manual_data[$section_name] = implode("\n", $data_rows);
+            $dataRows    = explode("\n", trim($section));
+            $sectionName = trim($dataRows[0] ?? '');
+            if ($sectionName === '') {
+                continue;
             }
+            unset($dataRows[0]);
+            $manualData[$sectionName] = implode("\n", $dataRows);
         }
-        return $manual_data;
+        return $manualData;
     }
-
 }

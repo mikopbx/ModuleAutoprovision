@@ -1,4 +1,14 @@
 <?php
+
+declare(strict_types=1);
+/*
+ * Copyright © MIKO LLC - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+
 return [
     'mo_ModuleAutoprovision' => 'Módulo de configuración automática de teléfono',
     'mod_Autoprovision_additional_params' => 'Opciones adicionales',
@@ -8,13 +18,7 @@ return [
     'mod_Autoprovision_Extension' => 'Plantilla de número de extensión',
     'SubHeaderModuleAutoprovision' => 'Ayuda para configurar teléfonos SIP',
     'BreadcrumbModuleAutoprovision' => 'Módulo de configuración automática de teléfono',
-    /**
- * Copyright © MIKO LLC - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited
- * Proprietary and confidential
- * Written by Alexey Portnov, 10 2019
- */
-    'repModuleAutoprovision' => 'Módulo -% repesent%',
+    'repModuleAutoprovision' => 'Módulo -% represent%',
     'mod_Autoprovision_header' => 'Si el módulo está habilitado, la cuenta SIP "<b>apv-miko-pbx</b>" pasa a estar disponible en la centralita.
 <br>Para configurar automáticamente su teléfono, debe restablecerlo a la configuración de fábrica.
 <br>Si el teléfono se conecta a la PBX por primera vez, quedará registrado en la cuenta "<b>apv-miko-pbx</b>".
@@ -40,4 +44,10 @@ La plantilla <b>805e0c67%</b> coincidirá con <b>805e0c670001</b> y <b>805e0c670
     'mod_Autoprovision_other_pbx' => 'Directorio telefónico',
     'mod_Autoprovision_other_pbx_name' => 'Nombre de la central telefónica',
     'mod_Autoprovision_other_pbx_address' => 'Dirección de red PBX',
+    'mod_Autoprovision_filter_posts' => 'Select…',
+    'mod_Autoprovision_other_pbx_header' => '<b>Warning!</b> The phone book must be accessible on every PBX at the URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br>
+List every address of the PBXes from which the phone book should be fetched.<br>',
+    'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>/pbxcore/api/autoprovision-http</b><br>
+When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
+The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
 ];

@@ -1,32 +1,19 @@
 <?php
+
+declare(strict_types=1);
+/*
+ * Copyright © MIKO LLC - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+
 return [
     'mo_ModuleAutoprovision' => 'Modul de configurare automată a telefonului',
     'BreadcrumbModuleAutoprovision' => 'Modul de configurare automată a telefonului',
     'SubHeaderModuleAutoprovision' => 'Ajutor la configurarea telefoanelor SIP',
-    /*
- * MikoPBX - free phone system for small business
- * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program.
- * If not, see <https://www.gnu.org/licenses/>.
- */
-    /**
- * Copyright © MIKO LLC - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited
- * Proprietary and confidential
- * Written by Alexey Portnov, 10 2019
- */
-    'repModuleAutoprovision' => 'Modul - %repesent%',
+    'repModuleAutoprovision' => 'Modul - %represent%',
     'mod_Autoprovision_Extension' => 'Șablon de extensie',
     'mod_Autoprovision_pbx_host' => 'Adresa serverului pentru înregistrarea telefonului',
     'mod_Autoprovision_mac_black' => 'Lista neagră MAC a telefonului',
@@ -57,4 +44,10 @@ Autoconfigurarea este posibilă numai pentru rețeaua locală a întreprinderii,
     'mod_Autoprovision_templates_header' => 'Când descrieți un șablon, puteți utiliza următorii parametri: <b>{SIP_USER_NAME}</b> - numele angajatului <b>{SIP_NUM}</b> - număr intern (autentificare) <b>{SIP_PASS}</b> - parolă',
     'mod_Autoprovision_templates_users_header' => 'Când descrieți o adresă MAC, este permisă utilizarea simbolului <b>%</b> - adică „orice set de caractere” <br>
 Șablonul <b>805e0c67%</b> se va potrivi cu <b>805e0c670001</b> și <b>805e0c670002</b>',
+    'mod_Autoprovision_filter_posts' => 'Select…',
+    'mod_Autoprovision_other_pbx_header' => '<b>Warning!</b> The phone book must be accessible on every PBX at the URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br>
+List every address of the PBXes from which the phone book should be fetched.<br>',
+    'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>/pbxcore/api/autoprovision-http</b><br>
+When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
+The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
 ];

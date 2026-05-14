@@ -1,4 +1,14 @@
 <?php
+
+declare(strict_types=1);
+/*
+ * Copyright © MIKO LLC - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+
 return [
     'mod_Autoprovision_mac_black' => '话机MAC地址黑名单',
     'mod_Autoprovision_pbx_host' => '手机注册服务器地址',
@@ -8,12 +18,6 @@ return [
     'mod_Autoprovision_additional_params' => '其他选项',
     'mod_Autoprovision_mac_white' => '手机MAC地址白名单',
     'BreadcrumbModuleAutoprovision' => '自动电话设置模块',
-    /**
- * Copyright © MIKO LLC - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited
- * Proprietary and confidential
- * Written by Alexey Portnov, 10 2019
- */
     'repModuleAutoprovision' => '模块 -% 表示%',
     'mod_Autoprovision_header' => '如果启用该模块，SIP 帐户“<b>apv-miko-pbx</b>”将在 PBX 上可用。
 <br>要自动配置您的手机，您需要将其重置为出厂设置。
@@ -40,4 +44,10 @@ return [
     'mod_Autoprovision_templates_header' => '描述模板时，可以使用以下参数： <b>{SIP_USER_NAME}</b> - 员工姓名 <b>{SIP_NUM}</b> - 内部号码（登录） <b>{SIP_PASS}</b> - 密码',
     'mod_Autoprovision_templates_users_header' => '描述 MAC 地址时，允许使用符号 <b>%</b> - 意思是“任何字符集”<br>
 模式 <b>805e0c67%</b> 将匹配 <b>805e0c670001</b> 和 <b>805e0c670002</b>',
+    'mod_Autoprovision_filter_posts' => 'Select…',
+    'mod_Autoprovision_other_pbx_header' => '<b>Warning!</b> The phone book must be accessible on every PBX at the URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br>
+List every address of the PBXes from which the phone book should be fetched.<br>',
+    'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>/pbxcore/api/autoprovision-http</b><br>
+When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
+The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
 ];

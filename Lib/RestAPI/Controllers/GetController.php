@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /*
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
@@ -14,7 +16,7 @@ use MikoPBX\Core\System\Network;
 use MikoPBX\Core\System\Util;
 use MikoPBX\Modules\PbxExtensionUtils;
 use MikoPBX\PBXCoreREST\Controllers\Modules\ModulesControllerBase;
-use Modules\ModuleAutoprovision\Lib\MikoPBXVersion;
+use MikoPBX\Common\Library\Text;
 use Modules\ModuleAutoprovision\Lib\Transliterate;
 use Modules\ModuleAutoprovision\Models\OtherPBX;
 use Modules\ModuleAutoprovision\Models\Templates;
@@ -370,13 +372,12 @@ class GetController extends ModulesControllerBase
         echo $phoneBook;
     }
 
-    private function camelize($inputString): string
+    private function camelize(string $inputString): string
     {
         $inputString = preg_replace('/\s+/', '-', $inputString);
         $inputString = Transliterate::ruToLat($inputString);
         $inputString = preg_replace('/[^A-Za-z0-9-]/u', '', $inputString);
-        $textClass = MikoPBXVersion::getTextClass();
-        return $textClass::camelize($inputString);
+        return Text::camelize($inputString);
     }
 
     /**

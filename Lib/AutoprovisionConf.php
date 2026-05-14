@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /**
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
@@ -17,57 +19,87 @@ use Modules\ModuleAutoprovision\Models\{ModuleAutoprovision};
 
 class AutoprovisionConf extends ConfigClass
 {
-    public const SIP_USER   = 'apv-miko-pbx';
-    public const SIP_SECRET = 'apv-miko-pbx';
+    public const SIP_USER     = 'apv-miko-pbx';
+    public const BASE_URI     = '/pbxcore/api/autoprovision-http';
 
-    public const BASE_URI   = '/pbxcore/api/autoprovision-http';
+    private const ALLOWED_IMG_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico', 'dob'];
+
+    /**
+     * Returns the SIP secret for the autoprovision peer.
+     * Stored in m_ModuleAutoprovision.sip_secret and generated at install time.
+     */
+    public static function getSipSecret(): string
+    {
+        $settings = ModuleAutoprovision::findFirst();
+        $secret   = $settings->sip_secret ?? '';
+        if ($secret === '') {
+            // Fallback for legacy DB rows without the column populated yet.
+            return self::SIP_USER;
+        }
+        return $secret;
+    }
 
     /**
      * Returns module workers to start it at WorkerSafeScript
-     * @return array
      */
     public function getModuleWorkers(): array
     {
         return [
             [
-                'type'           => WorkerSafeScriptsCore::CHECK_BY_PID_NOT_ALERT,
-                'worker'         => WorkerProvisioningServerPnP::class,
+                'type'   => WorkerSafeScriptsCore::CHECK_BY_BEANSTALK,
+                'worker' => WorkerProvisioningServerPnP::class,
             ],
         ];
     }
 
     /**
-     *  Process CoreAPI requests under root rights
-     *
-     * @param array $request
-     *
-     * @return PBXApiResult An object containing the result of the API call.
+     * Process CoreAPI requests under root rights.
+     * Only methods in {@see self::REST_ACTIONS} are dispatchable.
      */
     public function moduleRestAPICallback(array $request): PBXApiResult
     {
-        $res = new PBXApiResult();
+        $res            = new PBXApiResult();
         $res->processor = __METHOD__;
 
-        $action = $request['action']??'';
-        $data   = $request['data']??[];
-        if(method_exists($this, $action)){
-            $res = $this->$action($data);
-        }else{
-            $res->success = false;
-            $res->data = $request;
-        }
+        $action = $request['action'] ?? '';
+        $data   = $request['data'] ?? [];
+
+        $res = match ($action) {
+            'getProvisionConfig' => $this->getProvisionConfig($data),
+            'getImgFile'         => $this->getImgFile($data),
+            'reload'             => $this->reloadProvisioning(),
+            default              => (function () use ($request) {
+                $r          = new PBXApiResult();
+                $r->success = false;
+                $r->data    = ['error' => 'Unknown action', 'request' => $request];
+                return $r;
+            })(),
+        };
+
         return $res;
     }
 
-    public function getProvisionConfig($request):PBXApiResult{
-        /** @var PBXApiResult $res */
-        $res = new PBXApiResult();
+    /**
+     * Reloads dialplan + SIP after the settings page saved new configuration.
+     * Invoked from the JS layer via /pbxcore/api/modules/ModuleAutoprovision/reload.
+     */
+    private function reloadProvisioning(): PBXApiResult
+    {
+        PBX::dialplanReload();
+        PBX::sipReload();
+        $res          = new PBXApiResult();
+        $res->success = true;
+        return $res;
+    }
 
+    private function getProvisionConfig(array $request): PBXApiResult
+    {
+        $res           = new PBXApiResult();
         $autoprovision = new Autoprovision();
-        $filename    = $autoprovision->generateConfigPhone($request);
-        if (file_exists($filename)) {
+        $filename      = $autoprovision->generateConfigPhone($request);
+        if ($filename !== '' && file_exists($filename)) {
             $res->success = true;
-            $res->data = [
+            $res->data    = [
                 'fpassthru' => [
                     'filename'     => $filename,
                     'content_type' => 'text/plain',
@@ -77,12 +109,32 @@ class AutoprovisionConf extends ConfigClass
         }
         return $res;
     }
-    public function getImgFile($request):PBXApiResult{
+
+    private function getImgFile(array $request): PBXApiResult
+    {
         $res = new PBXApiResult();
-        $filename = "$this->moduleDir/assets/img/{$request['file']}";
+
+        $requested = (string)($request['file'] ?? '');
+        // Strip any path component to prevent traversal.
+        $basename  = basename($requested);
+        if ($basename === '' || $basename !== $requested) {
+            return $res;
+        }
+
+        $ext = strtolower(pathinfo($basename, PATHINFO_EXTENSION));
+        if (!in_array($ext, self::ALLOWED_IMG_EXTENSIONS, true)) {
+            return $res;
+        }
+
+        $imgDir   = realpath($this->moduleDir . '/public/assets/img');
+        $filename = $imgDir === false ? '' : realpath($imgDir . '/' . $basename);
+        if ($filename === false || $filename === '' || !str_starts_with($filename, $imgDir . DIRECTORY_SEPARATOR)) {
+            return $res;
+        }
+
         if (file_exists($filename)) {
             $res->success = true;
-            $res->data = [
+            $res->data    = [
                 'fpassthru' => [
                     'filename'     => $filename,
                     'content_type' => $this->guessImageMime($filename),
@@ -145,7 +197,7 @@ class AutoprovisionConf extends ConfigClass
         $options = [
             'type'     => 'auth',
             'username' => self::SIP_USER,
-            'password' => self::SIP_SECRET,
+            'password' => self::getSipSecret(),
         ];
         $conf    .= "[".self::SIP_USER."] \n";
         $conf    .= Util::overrideConfigurationArray($options, null, 'auth');
@@ -203,21 +255,21 @@ class AutoprovisionConf extends ConfigClass
     public function extensionGenContexts(): string
     {
         $settings = ModuleAutoprovision::findFirst();
-        if ($settings === null) {
+        if ($settings === null || empty($settings->extension)) {
             return '';
         }
-        $ext_conf = PHP_EOL."[autoprovision-internal]".PHP_EOL;
-        // Настройка телефона на конкретный exten.
-        $ext_conf .= "exten => _$settings->extension!,1,NoOp(Try autoprovision)".PHP_EOL."\t";
-        $ext_conf .= 'same => n,Set(PT1C_VIA=${PJSIP_HEADER(read,Via,1)})'.PHP_EOL;
-        $ext_conf .= "same => n,AGI($this->moduleDir/agi-bin/ModuleAutoprovisionAGI.php)".PHP_EOL;
-        return $ext_conf;
+        $extension = (string)$settings->extension;
+        $extConf   = PHP_EOL . '[autoprovision-internal]' . PHP_EOL;
+        // Pattern-match the configured exten and hand control to the AGI script.
+        $extConf  .= "exten => _{$extension}!,1,NoOp(Try autoprovision)" . PHP_EOL . "\t";
+        $extConf  .= 'same => n,Set(PT1C_VIA=${PJSIP_HEADER(read,Via,1)})' . PHP_EOL;
+        $extConf  .= "same => n,AGI({$this->moduleDir}/agi-bin/ModuleAutoprovisionAGI.php)" . PHP_EOL;
+        return $extConf;
     }
 
     /**
-     * Process after enable action in web interface
-     *
-     * @return void
+     * Runs after the module is enabled. Reloads dialplan + SIP, restarts cron,
+     * and kicks off the provisioning worker so the multicast listener becomes active.
      */
     public function onAfterModuleEnable(): void
     {
@@ -226,6 +278,6 @@ class AutoprovisionConf extends ConfigClass
         System::invokeActions(['cron' => 0]);
         $workerPath = Util::getFilePathByClassName(WorkerProvisioningServerPnP::class);
         $phpPath    = Util::which('php');
-        Processes::mwExec("$phpPath -f $workerPath");
+        Processes::mwExec(escapeshellarg($phpPath) . ' -f ' . escapeshellarg($workerPath));
     }
 }

@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /**
  * Copyright (C) MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
@@ -89,14 +91,14 @@ class WorkerProvisioningServerPnP extends WorkerBase
             $this->listen();
         } elseif ($action === 'socket_client') {
             $ip   = $argv[2] ?? '127.0.0.1';
-            $port = (integer)($argv[3] ?? 5062);
+            $port = (int)($argv[3] ?? 5062);
             $mac  = str_replace(':', '', $argv[4] ?? '0015657322ff');
             self::testSocketClient($ip, $port, $mac);
         } elseif ($action === 'socket_client_notify') {
             $ip_pbx     = $argv[2] ?? '127.0.0.1';
-            $port_pbx   = (integer)($argv[3] ?? 5060);
+            $port_pbx   = (int)($argv[3] ?? 5060);
             $ip_phone   = $argv[4] ?? '172.16.32.138';
-            $port_phone = (integer)($argv[5] ?? 5062);
+            $port_phone = (int)($argv[5] ?? 5062);
             self::socketClientNotify($ip_pbx, $port_pbx, $ip_phone, $port_phone);
         } elseif ($action === 'help') {
             echo "\n";
@@ -329,10 +331,14 @@ class WorkerProvisioningServerPnP extends WorkerBase
                 $headers[$h_name] = $row;
             }
         }
-        // Наполним таблицу ARP.
-        exec("timeout -t 1 ping {$headers['phone_ip']} -c 1 ");
-        // Анализируем MAC адрес устройства.
-        exec("busybox arp -D {$headers['phone_ip']} -n | /bin/busybox awk  '{ print $4 }' 2>&1", $out);
+        // Validate the IP we parsed from the SIP packet before passing it to the shell.
+        if (!filter_var($headers['phone_ip'], FILTER_VALIDATE_IP)) {
+            return [];
+        }
+        $safeIp = escapeshellarg($headers['phone_ip']);
+        // Populate the ARP table by pinging the phone, then read the MAC back.
+        exec("timeout -t 1 ping {$safeIp} -c 1 ");
+        exec("busybox arp -D {$safeIp} -n | /bin/busybox awk  '{ print \$4 }' 2>&1", $out);
         $real_mac = $out[0] ?? '';
         $real_mac = str_replace(':', '', $real_mac);
         if ($real_mac !== $headers['mac']) {
@@ -359,13 +365,19 @@ class WorkerProvisioningServerPnP extends WorkerBase
         if ( ! empty($headers['mac']) && ! empty($headers['phone_ip'])) {
             /** @var ModuleAutoprovisionDevice $res */
             /** @var ModuleAutoprovisionDevice $devise */
-            $devises = ModuleAutoprovisionDevice::find("host='{$headers['phone_ip']}'");
+            $devises = ModuleAutoprovisionDevice::find([
+                'host = :host:',
+                'bind' => ['host' => $headers['phone_ip']],
+            ]);
             foreach ($devises as $devise) {
                 $devise->host = '';
                 $devise->save();
             }
 
-            $res = ModuleAutoprovisionDevice::findFirst("mac='{$headers['mac']}'");
+            $res = ModuleAutoprovisionDevice::findFirst([
+                'mac = :mac:',
+                'bind' => ['mac' => $headers['mac']],
+            ]);
             if ($res === null) {
                 $res                     = new ModuleAutoprovisionDevice();
                 $res->mac                = $headers['mac'];

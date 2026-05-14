@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /*
  * MikoPBX - free phone system for small business
  * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
@@ -20,7 +22,7 @@
 use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
 
 return [
-    'repModuleAutoprovision'              => 'Модуль - %repesent%',
+    'repModuleAutoprovision'              => 'Модуль - %represent%',
     'mo_ModuleAutoprovision'              => 'Модуль автоматической настройки телефонов',
     'BreadcrumbModuleAutoprovision'       => 'Модуль автоматической настройки телефонов',
     'SubHeaderModuleAutoprovision'        => 'Помощь в настройке SIP телефонов',
@@ -51,11 +53,11 @@ return [
 Перечислите все адреса, АТС, с которых необходимо получить телефонную книгу. <br> ',
 
     'mod_Autoprovision_templates_users_header'  => 'При описании MAC адреса допускается использовать символ <b>%</b> - означающий "любой набор символов" <br>
-Шаблон <b>805e0c67%</b> будет соответстовать <b>805e0c670001</b> и <b>805e0c670002</b>',
+Шаблон <b>805e0c67%</b> будет соответствовать <b>805e0c670001</b> и <b>805e0c670002</b>',
 
     'mod_Autoprovision_templates_uri_header'=> '<b>Внимание!</b> Все URI строятся относительно базового значения <b>'.AutoprovisionConf::BASE_URI.'</b><br> 
 При описании URI допускается использовать символ <b>%</b> - означающий "любой набор символов" <br>
-URI <b>/%/%/test.cfg</b> будет соответстовать <b>/1/2/test.cfg</b>  и <b>/test/test3/test.cfg</b>',
+URI <b>/%/%/test.cfg</b> будет соответствовать <b>/1/2/test.cfg</b>  и <b>/test/test3/test.cfg</b>',
 
     'mod_Autoprovision_header'            => 'Если модуль включен, то на АТС становится доступна учетная запись SIP "<b>apv-miko-pbx</b>"
 <br>Для автоматической настройки телефона необходимо сбросить его к заводским настройками.

@@ -1,24 +1,17 @@
 <?php
+
+declare(strict_types=1);
+/*
+ * Copyright © MIKO LLC - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+
 return [
     'mod_Autoprovision_other_pbx_address' => 'PBX mrežna adresa',
-    /*
- * MikoPBX - free phone system for small business
- * Copyright © 2017-2023 Alexey Portnov and Nikolay Beketov
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with this program.
- * If not, see <https://www.gnu.org/licenses/>.
- */
-    'repModuleAutoprovision' => 'Modul - %repesent%',
+    'repModuleAutoprovision' => 'Modul - %represent%',
     'mo_ModuleAutoprovision' => 'Modul za automatsku konfiguraciju telefona',
     'BreadcrumbModuleAutoprovision' => 'Modul za automatsku konfiguraciju telefona',
     'SubHeaderModuleAutoprovision' => 'Pomoć pri postavljanju SIP telefona',
@@ -51,4 +44,10 @@ Uzorak <b>805e0c67%</b> odgovarat će <b>805e0c670001</b> i <b>805e0c670002</b>'
 <br>Da biste postavili svoj telefon, morate s njega nazvati broj “<b>%extension%</b>”, gdje je XXX interni broj na PBX-u.
 <br><br>
 Automatska konfiguracija moguća je samo za lokalnu mrežu poduzeća, za telefone <b>Yealink, Snom, Fanvil</b>.',
+    'mod_Autoprovision_filter_posts' => 'Select…',
+    'mod_Autoprovision_other_pbx_header' => '<b>Warning!</b> The phone book must be accessible on every PBX at the URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br>
+List every address of the PBXes from which the phone book should be fetched.<br>',
+    'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>/pbxcore/api/autoprovision-http</b><br>
+When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
+The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
 ];

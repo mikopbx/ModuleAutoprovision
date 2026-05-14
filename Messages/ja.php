@@ -1,17 +1,21 @@
 <?php
+
+declare(strict_types=1);
+/*
+ * Copyright © MIKO LLC - All Rights Reserved
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
+use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+
 return [
     'mod_Autoprovision_additional_params' => '追加オプション',
     'mod_Autoprovision_mac_white' => '電話のMACアドレスのホワイトリスト',
     'mod_Autoprovision_Extension' => '内線番号テンプレート',
     'SubHeaderModuleAutoprovision' => 'SIP電話の設定を支援する',
     'mo_ModuleAutoprovision' => '自動電話セットアップモジュール',
-    /**
- * Copyright © MIKO LLC - All Rights Reserved
- * Unauthorized copying of this file, via any medium is strictly prohibited
- * Proprietary and confidential
- * Written by Alexey Portnov, 10 2019
- */
-    'repModuleAutoprovision' => 'モジュール-％repesent％',
+    'repModuleAutoprovision' => 'モジュール-％represent％',
     'mod_Autoprovision_mac_black' => '電話のMACアドレスのブラックリスト',
     'mod_Autoprovision_pbx_host' => '電話登録用のサーバーアドレス',
     'BreadcrumbModuleAutoprovision' => '自動電話セットアップモジュール',
@@ -40,4 +44,10 @@ return [
     'mod_Autoprovision_templates_header' => 'テンプレートを記述する場合、次のパラメータを使用できます。 <b>{SIP_USER_NAME}</b> - 従業員名 <b>{SIP_NUM}</b> - 内部番号 (ログイン) <b>{SIP_PASS}</b> - パスワード',
     'mod_Autoprovision_templates_users_header' => 'MAC アドレスを記述するときは、「任意の文字セット」を意味する記号 <b>%</b> を使用できます。 <br>
 テンプレート <b>805e0c67%</b> は <b>805e0c670001</b> と <b>805e0c670002</b> に一致します。',
+    'mod_Autoprovision_filter_posts' => 'Select…',
+    'mod_Autoprovision_other_pbx_header' => '<b>Warning!</b> The phone book must be accessible on every PBX at the URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br>
+List every address of the PBXes from which the phone book should be fetched.<br>',
+    'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>/pbxcore/api/autoprovision-http</b><br>
+When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
+The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
 ];

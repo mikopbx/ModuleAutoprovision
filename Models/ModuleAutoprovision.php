@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /**
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
@@ -56,6 +58,14 @@ class ModuleAutoprovision extends ModulesModelsBase
      * @Column(type="string", nullable=true)
      */
     public $additional_params;
+
+    /**
+     * SIP secret used by the autoprovision peer.
+     * Generated at install time; never expose in templates or logs.
+     *
+     * @Column(type="string", nullable=true)
+     */
+    public $sip_secret;
 
     /**
      * Returns dynamic relations between module models and common models
