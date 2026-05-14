@@ -98,6 +98,11 @@ class ModuleAutoprovisionController extends BaseController
         if (!$this->request->isPost()) {
             return;
         }
+        // Intentionally not running BaseController::sanitizeData() here: nested fields
+        // (templates[*][template], additional_params, vendor blocks) carry raw XML/INI
+        // bodies that the provisioning REST controller echoes back to phones verbatim.
+        // Phalcon's FILTER_STRING wraps values in htmlspecialchars(), which would corrupt
+        // those payloads and break provisioning after every save.
         $data   = $this->request->getPost();
         $record = ModuleAutoprovision::findFirst() ?? new ModuleAutoprovision();
 
@@ -142,9 +147,7 @@ class ModuleAutoprovisionController extends BaseController
 
         $resultSaveTables = $this->saveAdditionalTables($data);
 
-        $this->flash->success(
-            $this->translation->_('ms_SuccessfulSaved') . ($record->additional_params ?? '')
-        );
+        $this->flash->success($this->translation->_('ms_SuccessfulSaved'));
         $this->view->success          = true;
         $this->view->resultSaveTables = $resultSaveTables;
 

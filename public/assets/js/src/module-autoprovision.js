@@ -124,8 +124,12 @@ const moduleAutoprovision = {
 	},
 
 	cbAfterSendForm(response) {
-		// Drop rows that were marked for deletion now that the server has removed them.
-		$('tr.marked-for-delete').remove();
+		// Form.js calls this on both success and failure paths. On failure the controller
+		// rolled the transaction back, so leave the marked-for-delete rows visible — removing
+		// them would lie about the DB state.
+		if (response.success === true) {
+			$('tr.marked-for-delete').remove();
+		}
 
 		// Re-bind freshly inserted rows from mock ids to real database ids.
 		Object.entries(response.resultSaveTables || {}).forEach(([table, mapping]) => {
