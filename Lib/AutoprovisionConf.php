@@ -65,13 +65,14 @@ class AutoprovisionConf extends ConfigClass
 
         $autoprovision = new Autoprovision();
         $filename    = $autoprovision->generateConfigPhone($request);
-        $need_delete = true;
         if (file_exists($filename)) {
             $res->success = true;
             $res->data = [
-                'filename'    => $filename,
-                'fpassthru'   => true,
-                'need_delete' => $need_delete,
+                'fpassthru' => [
+                    'filename'     => $filename,
+                    'content_type' => 'text/plain',
+                    'need_delete'  => true,
+                ],
             ];
         }
         return $res;
@@ -82,12 +83,29 @@ class AutoprovisionConf extends ConfigClass
         if (file_exists($filename)) {
             $res->success = true;
             $res->data = [
-                'filename'    => $filename,
-                'fpassthru'   => true,
-                'need_delete' => false,
+                'fpassthru' => [
+                    'filename'     => $filename,
+                    'content_type' => $this->guessImageMime($filename),
+                    'need_delete'  => false,
+                ],
             ];
         }
         return $res;
+    }
+
+    private function guessImageMime(string $filename): string
+    {
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        return match ($ext) {
+            'png'          => 'image/png',
+            'jpg', 'jpeg'  => 'image/jpeg',
+            'gif'          => 'image/gif',
+            'svg'          => 'image/svg+xml',
+            'webp'         => 'image/webp',
+            'bmp'          => 'image/bmp',
+            'ico'          => 'image/x-icon',
+            default        => 'application/octet-stream',
+        };
     }
 
     /**
