@@ -117,8 +117,14 @@ class Autoprovision extends Injectable
             return;
         }
 
-        $sock = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+        $sock = @socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
         if ($sock === false) {
+            Util::sysLogMsg(
+                WorkerProvisioningServerPnP::LOG_TAG,
+                "clientNotifyReboot: socket_create(SOCK_DGRAM) failed: " . socket_strerror(socket_last_error())
+                    . " (target $ipPhone:$portPhone)",
+                LOG_ERR
+            );
             return;
         }
 
@@ -143,7 +149,21 @@ class Autoprovision extends Injectable
             "Event: check-sync;reboot=true\r\n" .
             "Content-Length: 0\r\n\n";
 
-        socket_sendto($sock, $msg, strlen($msg), 0, $ipPhone, $portPhone);
+        $sent = @socket_sendto($sock, $msg, strlen($msg), 0, $ipPhone, $portPhone);
+        if ($sent === false) {
+            Util::sysLogMsg(
+                WorkerProvisioningServerPnP::LOG_TAG,
+                "clientNotifyReboot: socket_sendto $ipPhone:$portPhone failed: "
+                    . socket_strerror(socket_last_error($sock)),
+                LOG_ERR
+            );
+        } else {
+            Util::sysLogMsg(
+                WorkerProvisioningServerPnP::LOG_TAG,
+                "clientNotifyReboot: check-sync NOTIFY sent to $ipPhone:$portPhone via $eth",
+                LOG_NOTICE
+            );
+        }
         socket_close($sock);
     }
 

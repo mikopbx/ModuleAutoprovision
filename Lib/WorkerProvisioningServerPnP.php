@@ -28,6 +28,11 @@ use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 class WorkerProvisioningServerPnP extends WorkerBase
 {
     public const BROAD_CAST_IP = '224.0.1.75';
+
+    // Syslog program tag for the PnP worker. Operators can run
+    // `grep -E 'autoprovision-(pnp|http)' /storage/usbdisk1/mikopbx/log/system/messages`
+    // to see the full provisioning pipeline (multicast + HTTP) in one place.
+    public const LOG_TAG = 'autoprovision-pnp';
     private string $url;
     private BeanstalkClient $client_queue;
     private array $interfaces;
@@ -37,6 +42,7 @@ class WorkerProvisioningServerPnP extends WorkerBase
     private array $mac_black = [];
     private string $requests_dir;
     private bool $debug;
+    private bool $verbose_syslog = false;
 
     public function getSettings($debug = false):void
     {
@@ -69,6 +75,28 @@ class WorkerProvisioningServerPnP extends WorkerBase
              !is_dir($this->requests_dir)) {
             $this->requests_dir = '';
         }
+
+        // Opt-in per-packet syslog noise: `[debug]\nverbose = 1` inside additional_params.
+        $this->verbose_syslog = $this->parseVerboseFlag((string)($data->additional_params ?? ''));
+    }
+
+    /**
+     * Parses additional_params for a `[debug] verbose = <truthy>` toggle.
+     * Default off so production hosts don't flood the system message log.
+     */
+    private function parseVerboseFlag(string $additionalParams): bool
+    {
+        if ($additionalParams === '') {
+            return false;
+        }
+        // additional_params can be base64-encoded INI (see Autoprovision::parseIniSettings).
+        $decoded = base64_decode($additionalParams, true);
+        $candidate = ($decoded !== false && str_contains($decoded, '[')) ? $decoded : $additionalParams;
+        $parsed = @parse_ini_string($candidate, true, INI_SCANNER_TYPED);
+        if (!is_array($parsed) || !isset($parsed['debug']['verbose'])) {
+            return false;
+        }
+        return (bool)$parsed['debug']['verbose'];
     }
 
     /**
@@ -224,21 +252,64 @@ class WorkerProvisioningServerPnP extends WorkerBase
      */
     public function listen(): bool
     {
+        Util::sysLogMsg(
+            self::LOG_TAG,
+            sprintf(
+                'PnP listener starting: pid=%d interfaces=[%s] mac_white=%d mac_black=%d verbose=%d',
+                getmypid(),
+                implode(',', $this->interfaces),
+                count($this->mac_white),
+                count($this->mac_black),
+                (int)$this->verbose_syslog
+            ),
+            LOG_NOTICE
+        );
+
         $sock = @socket_create(AF_INET, SOCK_RAW, SOL_UDP);
-        if ($sock) {
-            socket_set_option($sock, SOL_SOCKET, SO_REUSEADDR, 1);
-            $options = ['group' => self::BROAD_CAST_IP];
-            foreach ($this->interfaces as $eth) {
-                $options['interface'] = $eth;
-                socket_set_option($sock, IPPROTO_IP, MCAST_JOIN_GROUP, $options);
+        if (!$sock) {
+            $err = socket_strerror(socket_last_error());
+            Util::sysLogMsg(
+                self::LOG_TAG,
+                "socket_create(SOCK_RAW) failed: $err. PnP discovery is OFF - phones will not receive provisioning URL.",
+                LOG_ERR
+            );
+            return false;
+        }
+        socket_set_option($sock, SOL_SOCKET, SO_REUSEADDR, 1);
+        $options = ['group' => self::BROAD_CAST_IP];
+        foreach ($this->interfaces as $eth) {
+            $options['interface'] = $eth;
+            // Clear errno so previous failures don't bleed into this iteration's strerror.
+            socket_clear_error($sock);
+            $joined = @socket_set_option($sock, IPPROTO_IP, MCAST_JOIN_GROUP, $options);
+            if ($joined) {
+                Util::sysLogMsg(
+                    self::LOG_TAG,
+                    "Joined multicast group " . self::BROAD_CAST_IP . " on interface $eth",
+                    LOG_NOTICE
+                );
+            } else {
+                $err = socket_strerror(socket_last_error($sock));
+                Util::sysLogMsg(
+                    self::LOG_TAG,
+                    "MCAST_JOIN_GROUP failed on interface $eth: $err",
+                    LOG_ERR
+                );
             }
-        } else {
+        }
+
+        if (!@socket_bind($sock, self::BROAD_CAST_IP, 5060)) {
+            $err = socket_strerror(socket_last_error($sock));
+            Util::sysLogMsg(
+                self::LOG_TAG,
+                "socket_bind(" . self::BROAD_CAST_IP . ":5060) failed: $err. PnP discovery is OFF.",
+                LOG_ERR
+            );
+            socket_close($sock);
             return false;
         }
-        $res = socket_bind($sock, self::BROAD_CAST_IP, 5060);
-        if ( ! $res) {
-            return false;
-        }
+
+        Util::sysLogMsg(self::LOG_TAG, 'PnP listener ready on ' . self::BROAD_CAST_IP . ':5060', LOG_NOTICE);
 
         do {
             if (socket_recv($sock, $packet, 10240, 0)) {
@@ -246,6 +317,22 @@ class WorkerProvisioningServerPnP extends WorkerBase
                 $ihl      = ord($packet[0]) & 0xf;
                 $payload  = substr($packet, $ihl << 2);
                 $row_data = trim(substr($payload, 8));
+
+                $sourceIp = '';
+                // Parse the IPv4 source-address bytes (octets 12..15 of the raw IP header).
+                if (strlen($packet) >= 16) {
+                    $sourceIp = ord($packet[12]) . '.' . ord($packet[13]) . '.'
+                              . ord($packet[14]) . '.' . ord($packet[15]);
+                }
+                // Source port lives at offset 0..1 of the UDP header (just past the IP header).
+                $udpStart = $ihl << 2;
+                $sourcePort = 0;
+                if (strlen($packet) >= $udpStart + 2) {
+                    $sourcePort = (ord($packet[$udpStart]) << 8) | ord($packet[$udpStart + 1]);
+                }
+
+                $this->logPacketReceived($sourceIp, $sourcePort, $row_data);
+
                 // Парсим.
                 $headers = $this->parse($row_data);
                 if (count($headers) > 0) {
@@ -255,6 +342,26 @@ class WorkerProvisioningServerPnP extends WorkerBase
             }
             $this->client_queue->wait(); // instead of sleep
         } while (true);
+    }
+
+    /**
+     * Per-packet log line, gated entirely behind the verbose flag.
+     * Default rsyslog matches `*.*`, so even LOG_INFO would land in /storage/.../messages -
+     * skip the call altogether when verbose is off to avoid flooding the global log
+     * on networks with many PnP-broadcasting phones.
+     */
+    private function logPacketReceived(string $sourceIp, int $sourcePort, string $rowData): void
+    {
+        if (!$this->verbose_syslog) {
+            return;
+        }
+        $firstLine = strtok($rowData, "\n");
+        $method = $firstLine !== false ? explode(' ', trim($firstLine))[0] : '';
+        Util::sysLogMsg(
+            self::LOG_TAG,
+            sprintf('packet from %s:%d method=%s', $sourceIp ?: 'unknown', $sourcePort, $method ?: 'unknown'),
+            LOG_NOTICE
+        );
     }
 
     /**
@@ -271,6 +378,15 @@ class WorkerProvisioningServerPnP extends WorkerBase
         }
         $method = explode(' ', $rows[0])[0];
         if ('SUBSCRIBE' !== $method) {
+            // SOCK_RAW receives every UDP datagram on the host, not just SIP — gate this
+            // log behind the verbose flag to avoid swamping /storage/.../messages.
+            if ($this->verbose_syslog) {
+                Util::sysLogMsg(
+                    self::LOG_TAG,
+                    "ignoring non-SUBSCRIBE packet: method=$method",
+                    LOG_NOTICE
+                );
+            }
             return [];
         }
         $headers = [
@@ -289,11 +405,21 @@ class WorkerProvisioningServerPnP extends WorkerBase
         if (count($this->mac_white) > 0 && ! in_array($headers['mac'], $this->mac_white, true)) {
             // Если есть белый список, то черный не используем.
             // Провижить можно только белый список.
+            Util::sysLogMsg(
+                self::LOG_TAG,
+                "rejecting MAC {$headers['mac']}: not in whitelist (whitelist size=" . count($this->mac_white) . ")",
+                LOG_NOTICE
+            );
             return [];
         }
 
         if (count($this->mac_black) > 0 && in_array($headers['mac'], $this->mac_black, true)) {
             // Если белый список пуст, то телефоны из черного списка провижить нельзя.
+            Util::sysLogMsg(
+                self::LOG_TAG,
+                "rejecting MAC {$headers['mac']}: blacklisted",
+                LOG_NOTICE
+            );
             return [];
         }
 
@@ -343,14 +469,14 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $real_mac = str_replace(':', '', $real_mac);
         if ($real_mac !== $headers['mac']) {
             Util::sysLogMsg(
-                $this->class_name,
+                self::LOG_TAG,
                 'The mac address of the device does not match the address in the sip request r_mac: ' . $real_mac . ' mac: ' . $headers['mac'],
                 LOG_NOTICE
             );
         }
         if ( ! empty($headers['mac']) && ! empty($headers['phone_ip'])) {
             Util::sysLogMsg(
-                $this->class_name,
+                self::LOG_TAG,
                 "Request provisiong from ip: {$headers['phone_ip']}; phone: {$headers['Event']['vendor']} {$headers['Event']['model']}; mac=" . $real_mac,
                 LOG_NOTICE
             );
@@ -416,7 +542,15 @@ class WorkerProvisioningServerPnP extends WorkerBase
      */
     public function send_response($headers): void
     {
-        $sock = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+        $sock = @socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+        if ($sock === false) {
+            Util::sysLogMsg(
+                self::LOG_TAG,
+                'send_response: socket_create(SOCK_DGRAM) failed: ' . socket_strerror(socket_last_error()),
+                LOG_ERR
+            );
+            return;
+        }
         $msg  = "SIP/2.0 200 OK\r\n" .
             "{$headers['Via']}\r\n" .
             "Contact: <sip:{$headers['phone_ip']}:{$headers['phone_port']};transport=udp;handler=dum>\r\n" .
@@ -450,6 +584,21 @@ class WorkerProvisioningServerPnP extends WorkerBase
 
         $this->verbose("\n" . $msg);
         $this->sendToHost($sock, $headers['phone_ip'], (int)$headers['phone_port'], $msg);
+        // Do NOT log $provisionUrl - it carries a per-request `solt` token consumed by
+        // a no-auth REST endpoint that returns the phone's SIP credentials. Operators only
+        // need to know NOTIFY went out, what model it targeted, and whether it landed.
+        Util::sysLogMsg(
+            self::LOG_TAG,
+            sprintf(
+                'NOTIFY sent to %s:%d mac=%s vendor=%s model=%s',
+                $headers['phone_ip'],
+                (int)$headers['phone_port'],
+                $headers['mac'],
+                $headers['Event']['vendor'] ?? '',
+                $headers['Event']['model'] ?? ''
+            ),
+            LOG_NOTICE
+        );
         socket_close($sock);
     }
 
@@ -472,10 +621,10 @@ class WorkerProvisioningServerPnP extends WorkerBase
                     socket_sendto($sock, $msg, $len, 0, $ip, $port);
                 }
             } catch (\Throwable $e) {
-                Util::sysLogMsg($this->class_name, $e->getMessage(), LOG_ERR);
+                Util::sysLogMsg(self::LOG_TAG, $e->getMessage(), LOG_ERR);
             }
         } else {
-            Util::sysLogMsg($this->class_name, "Host lookup failed $ip:$port...", LOG_ERR);
+            Util::sysLogMsg(self::LOG_TAG, "Host lookup failed $ip:$port...", LOG_ERR);
         }
     }
 
