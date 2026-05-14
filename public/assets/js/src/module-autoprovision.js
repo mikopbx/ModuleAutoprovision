@@ -7,20 +7,8 @@
 /* global globalRootUrl, Config, Form */
 
 const moduleAutoprovision = {
-	idUrl: 'module-autoprovision/module-autoprovision',
+	saveUrl: 'module-autoprovision/module-autoprovision/save',
 	$formObj: $('#module-autoprovision-form'),
-
-	/**
-	 * Mapping of form-section prefix → server-side model class.
-	 * Must stay in sync with App/Controllers/ModuleAutoprovisionController::TABLE_MAP
-	 * and App/Views/ModuleAutoprovision/index.volt (data-table-key / data-model attrs).
-	 */
-	tableMap: {
-		templates: 'Templates',
-		templates_uri: 'TemplatesUri',
-		phone_settings: 'TemplatesUsers',
-		other_pbx: 'OtherPBX',
-	},
 
 	initialize() {
 		moduleAutoprovision.initializeForm();
@@ -59,8 +47,10 @@ const moduleAutoprovision = {
 
 	/**
 	 * Single handler for row delete and template-edit buttons.
-	 * Targets are identified by .remove-row / .show-template-options classes
-	 * and the table is read from the nearest [data-table-key] / [data-model] table element.
+	 *
+	 * Delete is deferred: unsaved rows (id "none_*") are dropped from the DOM, and persisted
+	 * rows get a hidden "<table>[<id>][__delete]=1" input plus a `marked-for-delete` class.
+	 * A second click on a marked row un-marks it. Deletion takes effect on Save.
 	 */
 	bindRowActions() {
 		const $body = $('body');
@@ -72,23 +62,31 @@ const moduleAutoprovision = {
 			const $row = $(this).closest('tr');
 			const $table = $row.closest('table');
 			const tableKey = $table.attr('data-table-key');
-			const model = $table.attr('data-model');
 			const rowId = $row.attr('id');
-			if (!model || !tableKey || !rowId) {
+			if (!tableKey || !rowId) {
 				return;
 			}
-			$.ajax({
-				type: 'POST',
-				url: `${globalRootUrl}${moduleAutoprovision.idUrl}/delete`,
-				data: { table: model, id: rowId },
-				success() {
-					$row.remove();
-				},
-				error(xhr, status, error) {
-					/* eslint-disable-next-line no-console */
-					console.debug('Delete request failed', status, error);
-				},
-			});
+
+			// Unsaved row — just drop it; nothing for the server to delete.
+			if (rowId.startsWith('none_')) {
+				$row.remove();
+				Form.dataChanged();
+				return;
+			}
+
+			// Toggle deletion mark for persisted rows.
+			const deleteInputName = `${tableKey}[${rowId}][__delete]`;
+			const $existing = $row.find(`input[name="${deleteInputName}"]`);
+			if ($existing.length) {
+				$existing.remove();
+				$row.removeClass('marked-for-delete');
+			} else {
+				$('<input>', { type: 'hidden', name: deleteInputName, value: '1' }).appendTo($row);
+				$row.addClass('marked-for-delete');
+			}
+			// Re-init form so Semantic UI's `form('get values')` picks up the dynamic input.
+			moduleAutoprovision.$formObj.form();
+			Form.dataChanged();
 		});
 
 		$body.on('click', '.show-template-options', function handleEditTemplate(e) {
@@ -126,6 +124,9 @@ const moduleAutoprovision = {
 	},
 
 	cbAfterSendForm(response) {
+		// Drop rows that were marked for deletion now that the server has removed them.
+		$('tr.marked-for-delete').remove();
+
 		// Re-bind freshly inserted rows from mock ids to real database ids.
 		Object.entries(response.resultSaveTables || {}).forEach(([table, mapping]) => {
 			Object.entries(mapping).forEach(([oldId, newId]) => {
@@ -161,7 +162,7 @@ const moduleAutoprovision = {
 
 	initializeForm() {
 		Form.$formObj = moduleAutoprovision.$formObj;
-		Form.url = `${globalRootUrl}${moduleAutoprovision.idUrl}/save`;
+		Form.url = `${globalRootUrl}${moduleAutoprovision.saveUrl}`;
 		Form.cbBeforeSendForm = moduleAutoprovision.cbBeforeSendForm;
 		Form.cbAfterSendForm = moduleAutoprovision.cbAfterSendForm;
 		Form.initialize();
@@ -172,7 +173,7 @@ const moduleAutoprovision = {
 			closable: true,
 			onApprove() {
 				const value = $(this).find('textarea').val();
-				$(`textarea[name="templates-template-${$(this).attr('data-id')}"]`).val(value);
+				$(`textarea[name="templates[${$(this).attr('data-id')}][template]"]`).val(value);
 				Form.checkValues();
 				return true;
 			},

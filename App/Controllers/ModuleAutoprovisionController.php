@@ -26,9 +26,11 @@ class ModuleAutoprovisionController extends BaseController
     private const MODULE_UNIQUE_ID = 'ModuleAutoprovision';
 
     /**
-     * Map of form-section prefix → model class. Form input names use the prefix as a column-table key
-     * (e.g. <input name="templates_uri-uri-7">). Keep this in sync with App/Views/index.volt and
-     * public/assets/js/src/module-autoprovision.js → tableMap.
+     * Map of form-section prefix → model class. Form input names use PHP array notation
+     * (e.g. <input name="templates_uri[7][uri]">), parsed by PHP into nested $_POST arrays.
+     * Array notation is required so the URL-encoded body cannot contain a literal "1=1"
+     * substring (which the nginx WAF blocks as a SQL-injection pattern). Keep this in sync
+     * with App/Views/index.volt and public/assets/js/src/module-autoprovision.js → tableMap.
      */
     private const TABLE_MAP = [
         'templates'      => Templates::class,
@@ -59,6 +61,13 @@ class ModuleAutoprovisionController extends BaseController
     {
         $headerCss = $this->assets->collection(AssetProvider::HEADER_CSS);
         $headerCss->addCss('css/cache/' . self::MODULE_UNIQUE_ID . '/module-autoprovision.css', true);
+
+        // Semantic UI's modal module is not part of MikoPBX's default bundle — the
+        // template-editor on the Templates tab relies on $.fn.modal, so we pull it in here.
+        $this->assets->collection(AssetProvider::SEMANTIC_UI_CSS)
+            ->addCss('css/vendor/semantic/modal.min.css', true);
+        $this->assets->collection(AssetProvider::SEMANTIC_UI_JS)
+            ->addJs('js/vendor/semantic/modal.min.js', true);
 
         $footerJs = $this->assets->collection(AssetProvider::FOOTER_JS);
         $footerJs
@@ -145,40 +154,42 @@ class ModuleAutoprovisionController extends BaseController
     /**
      * Returns the table → [oldId → newId] map used by the JS layer to re-bind inserted rows.
      *
-     * @param array<string, mixed> $data Raw POST body, with keys shaped like "<table>-<column>-<id>".
+     * Rows carrying `__delete = 1` are removed from the database in the same transaction
+     * instead of being saved; the JS layer marks rows for deletion and submits them via
+     * the standard save flow, so there is no separate delete endpoint.
+     *
+     * @param array<string, mixed> $data Raw POST body. Editable tables arrive as nested arrays
+     *                                    keyed by table prefix → row id → column (PHP array notation).
      * @return array<string, array<string, string>>
      */
     private function saveAdditionalTables(array $data): array
     {
-        $results    = [];
-        $tablesData = [];
-        foreach ($data as $key => $value) {
-            $parts = explode('-', (string)$key, 3);
-            if (count($parts) !== 3) {
-                continue;
-            }
-            [$table, $column, $id] = $parts;
-            if (!array_key_exists($table, self::TABLE_MAP)) {
-                continue;
-            }
-            $tablesData[$table][$id][$column] = $value;
-        }
+        $results = [];
 
-        foreach ($tablesData as $table => $rowsByMockId) {
-            foreach ($rowsByMockId as $id => $rowData) {
-                if ($id === 'emptyTemplateRow') {
+        foreach (self::TABLE_MAP as $table => $class) {
+            if (!isset($data[$table]) || !is_array($data[$table])) {
+                continue;
+            }
+            foreach ($data[$table] as $id => $rowData) {
+                if ($id === 'emptyTemplateRow' || !is_array($rowData)) {
                     continue;
                 }
-                $class = self::TABLE_MAP[$table];
                 /** @var \Phalcon\Mvc\Model|null $dbRow */
                 $dbRow = $class::findFirst([
                     'id = :id:',
                     'bind' => ['id' => $id],
                 ]);
+                if (!empty($rowData['__delete'])) {
+                    $dbRow?->delete();
+                    continue;
+                }
                 if ($dbRow === null) {
                     $dbRow = new $class();
                 }
                 foreach ($rowData as $column => $value) {
+                    if ($column === '__delete') {
+                        continue;
+                    }
                     $dbRow->{$column} = $value;
                 }
                 if ($dbRow->save()) {
@@ -188,47 +199,6 @@ class ModuleAutoprovisionController extends BaseController
         }
 
         return $results;
-    }
-
-    /**
-     * Deletes a single row from one of the inline tables.
-     */
-    public function deleteAction(): void
-    {
-        $table     = (string)$this->request->get('table');
-        $className = $this->resolveModelClass($table);
-        if ($className === '') {
-            $this->view->success = false;
-            return;
-        }
-
-        $id     = (string)$this->request->get('id');
-        $record = $className::findFirst([
-            'id = :id:',
-            'bind' => ['id' => $id],
-        ]);
-        if ($record !== null && !$record->delete()) {
-            $this->flash->error(implode('<br>', $record->getMessages()));
-            $this->view->success = false;
-            return;
-        }
-        $this->view->success = true;
-    }
-
-    /**
-     * Whitelist-resolves a user-supplied short table name to a fully qualified model class.
-     *
-     * @return class-string<\Phalcon\Mvc\Model>|string Empty string when the name does not match.
-     */
-    private function resolveModelClass(string $tableName): string
-    {
-        $allowed = [
-            'Templates'      => Templates::class,
-            'TemplatesUri'   => TemplatesUri::class,
-            'TemplatesUsers' => TemplatesUsers::class,
-            'OtherPBX'       => OtherPBX::class,
-        ];
-        return $allowed[$tableName] ?? '';
     }
 
     /**

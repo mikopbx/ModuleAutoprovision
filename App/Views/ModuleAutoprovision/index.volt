@@ -27,10 +27,10 @@
               {% endif %}
             >
                 <td data-label="name" data-id="{{ pbx['id']|e }}">
-                    <div class="ui fluid mini icon input"><input type="text" name="other_pbx-name-{{ pbx['id']|e }}" placeholder="" value="{{ pbx['name']|default('')|e }}"></div>
+                    <div class="ui fluid mini icon input"><input type="text" name="other_pbx[{{ pbx['id']|e }}][name]" placeholder="" value="{{ pbx['name']|default('')|e }}"></div>
                 </td>
                 <td data-label="address" data-id="{{ pbx['id']|e }}">
-                    <div class="ui fluid mini icon input"><input type="text" name="other_pbx-address-{{ pbx['id']|e }}" placeholder="" value="{{ pbx['address']|default('')|e }}"></div>
+                    <div class="ui fluid mini icon input"><input type="text" name="other_pbx[{{ pbx['id']|e }}][address]" placeholder="" value="{{ pbx['address']|default('')|e }}"></div>
                 </td>
                 <td data-label="actions" class="right aligned">
                     <div class="ui compact basic icon buttons action-buttons">
@@ -92,11 +92,11 @@
                 {% endif %}
               >
                 <td data-label="uri" data-id="{{ template['id']|e }}">
-                    <div class="ui fluid mini icon input"><input type="text"  name="templates_uri-uri-{{ template['id']|e }}" placeholder="" value="{{ template['uri']|default('')|e }}"></div>
+                    <div class="ui fluid mini icon input"><input type="text"  name="templates_uri[{{ template['id']|e }}][uri]" placeholder="" value="{{ template['uri']|default('')|e }}"></div>
                 </td>
                 <td data-label="template" data-id="{{ template['id']|e }}">
                     <div class="ui dropdown">
-                      <input type="hidden" name="templates_uri-templateId-{{ template['id']|e }}" value="{{ template['templateId']|default('')|e }}">
+                      <input type="hidden" name="templates_uri[{{ template['id']|e }}][templateId]" value="{{ template['templateId']|default('')|e }}">
                       <i class="file alternate icon"></i>
                       <span class="text">{{ t._('mod_Autoprovision_filter_posts') }}</span>
                       <div class="menu">
@@ -143,7 +143,7 @@
           >
             <td data-label="user" data-id="{{ template['id']|e }}">
                 <div class="ui dropdown">
-                  <input type="hidden" name="phone_settings-userId-{{ template['id']|e }}" value="{{ template['userId']|default('')|e }}">
+                  <input type="hidden" name="phone_settings[{{ template['id']|e }}][userId]" value="{{ template['userId']|default('')|e }}">
                   <i class="user icon"></i>
                   <span class="text">{{ t._('mod_Autoprovision_filter_posts') }}</span>
                   <div class="menu">
@@ -162,11 +162,11 @@
                 </div>
             </td>
             <td data-label="mac" data-id="{{ template['id']|e }}">
-                <div class="ui fluid mini icon input"><input type="text"  name="phone_settings-mac-{{ template['id']|e }}" placeholder="" value="{{ template['mac']|default('')|e }}"></div>
+                <div class="ui fluid mini icon input"><input type="text"  name="phone_settings[{{ template['id']|e }}][mac]" placeholder="" value="{{ template['mac']|default('')|e }}"></div>
             </td>
             <td data-label="template" data-id="{{ template['id']|e }}">
                 <div class="ui dropdown">
-                  <input type="hidden" name="phone_settings-templateId-{{ template['id']|e }}" value="{{ template['templateId']|default('')|e }}">
+                  <input type="hidden" name="phone_settings[{{ template['id']|e }}][templateId]" value="{{ template['templateId']|default('')|e }}">
                   <i class="file alternate icon"></i>
                   <span class="text">{{ t._('mod_Autoprovision_filter_posts') }}</span>
                   <div class="menu">
@@ -212,10 +212,10 @@
               {% endif %}
             >
                 <td data-label="name" data-id="{{ template['id']|e }}">
-                    <div class="ui fluid mini icon input"><input type="text" name="templates-name-{{ template['id']|e }}" placeholder="" value="{{ template['name']|default('')|e }}"></div>
+                    <div class="ui fluid mini icon input"><input type="text" name="templates[{{ template['id']|e }}][name]" placeholder="" value="{{ template['name']|default('')|e }}"></div>
                 </td>
                 <td data-label="template" data-id="{{ template['id']|e }}" class="right aligned" style="display: none">
-                    <textarea name="templates-template-{{ template['id']|e }}" >{{ template['template']|default('')|e }}</textarea>
+                    <textarea name="templates[{{ template['id']|e }}][template]" >{{ template['template']|default('')|e }}</textarea>
                     <div class="ui modal segment" data-id="{{ template['id']|e }}" data-id-table="templates">
                       <i class="close icon"></i>
                         <div class="ui form">
