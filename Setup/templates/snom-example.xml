@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MikoPBX Autoprovision — Snom example template.
+     Placeholders {SIP_NUM}, {SIP_USER_NAME}, {SIP_PASS} substituted per device. -->
+<settings>
+    <phone-settings>
+        <user_pname idx="1" perm="RW">{SIP_NUM}</user_pname>
+        <user_name idx="1" perm="RW">{SIP_NUM}</user_name>
+        <user_realname idx="1" perm="RW">{SIP_USER_NAME}</user_realname>
+        <user_pass idx="1" perm="RW">{SIP_PASS}</user_pass>
+        <user_host idx="1" perm="RW">pbx.example.local</user_host>
+        <user_srtp idx="1" perm="RW">off</user_srtp>
+        <answer_after_policy perm="RW">idle</answer_after_policy>
+    </phone-settings>
+</settings>

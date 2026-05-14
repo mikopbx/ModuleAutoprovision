@@ -1,0 +1,20 @@
+<<VOIP CONFIG FILE>>Version:2.0002
+# MikoPBX Autoprovision — Fanvil example template.
+# Placeholders {SIP_NUM}, {SIP_USER_NAME}, {SIP_PASS} are substituted per device.
+
+<SIP CONFIG MODULE>
+--SIP Line List--  :
+SIP1 Enable Reg    :1
+SIP1 Phone Number  :{SIP_NUM}
+SIP1 Display Name  :{SIP_USER_NAME}
+SIP1 Sip Name      :{SIP_NUM}
+SIP1 Register Addr :pbx.example.local
+SIP1 Register Port :5060
+SIP1 Register User :{SIP_NUM}
+SIP1 Register Pswd :{SIP_PASS}
+
+<TELE CONFIG MODULE>
+SIP1 Caller Id Type:4
+P1 Enable Intercom :1
+
+<<END OF FILE>>

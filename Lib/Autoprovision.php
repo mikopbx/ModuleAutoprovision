@@ -96,10 +96,12 @@ class Autoprovision extends Injectable
         }
 
         $confManager = match ($req_data['vendor'] ?? '') {
-            'yealink' => new AutoprovisionYealink(),
-            'fanvil'  => new AutoprovisionFanvil(),
-            'snom'    => new AutoprovisionSnom(),
-            default   => null,
+            'yealink'     => new AutoprovisionYealink(),
+            'fanvil'      => new AutoprovisionFanvil(),
+            'snom'        => new AutoprovisionSnom(),
+            'grandstream' => new AutoprovisionGrandstream(),
+            'htek'        => new AutoprovisionHtek(),
+            default       => null,
         };
         if ($confManager === null) {
             return '';

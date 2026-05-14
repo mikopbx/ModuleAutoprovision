@@ -27,6 +27,8 @@ use MikoPBX\Core\System\Processes;
 use MikoPBX\Core\System\Util;
 use MikoPBX\Modules\Setup\PbxExtensionSetupBase;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
+use Modules\ModuleAutoprovision\Models\Templates;
+use Modules\ModuleAutoprovision\Models\TemplatesUri;
 use Throwable;
 
 class PbxExtensionSetup extends PbxExtensionSetupBase
@@ -66,6 +68,10 @@ class PbxExtensionSetup extends PbxExtensionSetupBase
 
         $result = $settings->save();
 
+        if ($result) {
+            $result = $this->installDefaultTemplates();
+        }
+
         $extensionRow = Extensions::findFirst([
             'number = :number:',
             'bind' => ['number' => $pattern],
@@ -89,6 +95,68 @@ class PbxExtensionSetup extends PbxExtensionSetupBase
         }
 
         return $this->registerNewModule();
+    }
+
+    /**
+     * Seeds vendor-specific example templates on a fresh install only.
+     *
+     * Each template demonstrates the placeholder system ({SIP_NUM}, {SIP_USER_NAME},
+     * {SIP_PASS}) substituted per device by GetController::getConfigStatic and is
+     * mapped to an illustrative URI under "examples/" — admins copy and adapt them
+     * to their fleet rather than serving them directly to phones.
+     *
+     * Skips entirely when the Templates table already contains rows, so upgrades
+     * never overwrite user-authored data.
+     */
+    private function installDefaultTemplates(): bool
+    {
+        try {
+            if ((int)Templates::count() > 0) {
+                return true;
+            }
+        } catch (Throwable $e) {
+            Util::sysLogMsg(self::LOG_TAG, 'Failed to inspect Templates table: ' . $e->getMessage());
+            return false;
+        }
+
+        $seeds = [
+            ['name' => 'Yealink (example)',     'file' => 'yealink-example.cfg',     'uri' => '/examples/yealink-common.cfg'],
+            ['name' => 'Fanvil (example)',      'file' => 'fanvil-example.txt',      'uri' => '/examples/fanvil-common.txt'],
+            ['name' => 'Snom (example)',        'file' => 'snom-example.xml',        'uri' => '/examples/snom-common.xml'],
+            ['name' => 'Grandstream (example)', 'file' => 'grandstream-example.xml', 'uri' => '/examples/grandstream-common.xml'],
+            ['name' => 'Htek (example)',        'file' => 'htek-example.cfg',        'uri' => '/examples/htek-common.cfg'],
+        ];
+
+        $templatesDir = __DIR__ . '/templates';
+        foreach ($seeds as $seed) {
+            $path = $templatesDir . '/' . $seed['file'];
+            if (!is_readable($path)) {
+                Util::sysLogMsg(self::LOG_TAG, "Seed template not readable: {$path}");
+                continue;
+            }
+            $body = file_get_contents($path);
+            if ($body === false) {
+                continue;
+            }
+
+            $template           = new Templates();
+            $template->name     = $seed['name'];
+            $template->template = $body;
+            if (!$template->save()) {
+                Util::sysLogMsg(self::LOG_TAG, "Failed to save seed template '{$seed['name']}'.");
+                return false;
+            }
+
+            $uri             = new TemplatesUri();
+            $uri->uri        = $seed['uri'];
+            $uri->templateId = (string)$template->id;
+            if (!$uri->save()) {
+                Util::sysLogMsg(self::LOG_TAG, "Failed to save URI mapping for '{$seed['name']}'.");
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
