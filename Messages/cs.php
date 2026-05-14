@@ -1,15 +1,10 @@
 <?php
-
-declare(strict_types=1);
-/*
+return [
+    /*
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
  * Proprietary and confidential
  */
-
-use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
-
-return [
     'repModuleAutoprovision' => '%represent%',
     'mod_Autoprovision_mac_white' => 'Seznam povolených MAC adres telefonu',
     'mod_Autoprovision_mac_black' => 'Černá listina MAC adres telefonů',
@@ -45,9 +40,4 @@ Automatická konfigurace je možná pouze pro lokální síť podniku, pro telef
     'mod_Autoprovision_other_pbx_address' => 'Síťová adresa PBX',
     'mod_Autoprovision_templates_header' => 'Při popisu šablony můžete použít následující parametry: <b>{SIP_USER_NAME}</b> - jméno zaměstnance <b>{SIP_NUM}</b> - interní číslo (login) <b>{SIP_PASS}</b> - heslo',
     'mod_Autoprovision_filter_posts' => 'Select…',
-    'mod_Autoprovision_other_pbx_header' => '<b>Warning!</b> The phone book must be accessible on every PBX at the URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br>
-List every address of the PBXes from which the phone book should be fetched.<br>',
-    'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>/pbxcore/api/autoprovision-http</b><br>
-When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
-The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
 ];

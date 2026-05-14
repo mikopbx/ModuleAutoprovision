@@ -1,15 +1,10 @@
 <?php
-
-declare(strict_types=1);
-/*
+return [
+    /*
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
  * Proprietary and confidential
  */
-
-use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
-
-return [
     'mo_ModuleAutoprovision' => 'Telefonun avtomatik konfiqurasiya modulu',
     'BreadcrumbModuleAutoprovision' => 'Telefonun avtomatik konfiqurasiya modulu',
     'mod_Autoprovision_mac_black' => 'Telefon MAC Qara Siyahı',
@@ -45,9 +40,4 @@ Avtokonfiqurasiya yalnız müəssisənin yerli şəbəkəsi, <b>Yealink, Snom, F
     'mod_Autoprovision_templates_users_header' => 'MAC ünvanını təsvir edərkən <b>%</b> simvolundan istifadə etməyə icazə verilir - "hər hansı bir simvol dəsti" mənasını verir <br>
 <b>805e0c67%</b> şablonu <b>805e0c670001</b> və <b>805e0c670002</b> ilə uyğunlaşacaq',
     'mod_Autoprovision_filter_posts' => 'Select…',
-    'mod_Autoprovision_other_pbx_header' => '<b>Warning!</b> The phone book must be accessible on every PBX at the URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br>
-List every address of the PBXes from which the phone book should be fetched.<br>',
-    'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>/pbxcore/api/autoprovision-http</b><br>
-When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
-The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
 ];
