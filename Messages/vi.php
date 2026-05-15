@@ -10,6 +10,8 @@ return [
     'BreadcrumbModuleAutoprovision' => 'Mô-đun cài đặt điện thoại tự động',
     'mo_ModuleAutoprovision' => 'Mô-đun cài đặt điện thoại tự động',
     'repModuleAutoprovision' => 'Mô-đun -% represent%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - phân phối cấu hình điện thoại qua HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Cổng TCP riêng được ModuleAutoprovision phục vụ qua HTTP thuần (không chuyển hướng HTTPS).<br>Điện thoại IP tải các tệp cấu hình của mình từ cổng này trong quá trình provisioning.<br>Chỉ mở quyền truy cập cho mạng nội bộ nơi các điện thoại được kết nối.',
     'mod_Autoprovision_additional_params' => 'Tùy chọn bổ sung',
     'mod_Autoprovision_mac_white' => 'Danh sách cho phép địa chỉ MAC của điện thoại',
     'mod_Autoprovision_mac_black' => 'Danh sách đen địa chỉ MAC của điện thoại',

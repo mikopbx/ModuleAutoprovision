@@ -14,6 +14,8 @@ return [
     'SubHeaderModuleAutoprovision' => 'Aiuto nella configurazione dei telefoni SIP',
     'BreadcrumbModuleAutoprovision' => 'Modulo di configurazione automatica del telefono',
     'repModuleAutoprovision' => 'Modulo -% rappresentante%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovisioning - consegna della configurazione dei telefoni via HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Porta TCP dedicata servita da ModuleAutoprovision su HTTP semplice (senza redirect HTTPS).<br>I telefoni IP scaricano i file di configurazione da questa porta durante il provisioning.<br>Consentire il traffico solo dalla rete locale dei telefoni.',
     'mod_Autoprovision_header' => 'Se il modulo è abilitato, sul PBX diventa disponibile l\'account SIP "<b>apv-miko-pbx</b>".
 <br>Per configurare automaticamente il telefono, è necessario ripristinarlo alle impostazioni di fabbrica.
 <br>Se il telefono si connette al PBX per la prima volta, verrà registrato sull\'account "<b>apv-miko-pbx</b>".

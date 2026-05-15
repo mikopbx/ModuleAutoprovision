@@ -6,6 +6,8 @@ return [
  * Proprietary and confidential
  */
     'repModuleAutoprovision' => '%represent%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision – doručování konfigurace telefonů přes HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Vyhrazený TCP port obsluhovaný modulem ModuleAutoprovision přes čisté HTTP (bez přesměrování na HTTPS).<br>IP telefony si z tohoto portu během automatické konfigurace stahují své konfigurační soubory.<br>Přístup otevřete pouze pro lokální síť, ve které telefony jsou.',
     'mod_Autoprovision_mac_white' => 'Seznam povolených MAC adres telefonu',
     'mod_Autoprovision_mac_black' => 'Černá listina MAC adres telefonů',
     'mod_Autoprovision_pbx_host' => 'Adresa serveru pro telefonickou registraci',

@@ -6,6 +6,8 @@ return [
  * Proprietary and confidential
  */
     'repModuleAutoprovision' => 'Autoprovision module - %represent%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - אספקת תצורת טלפונים דרך HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'יציאת TCP ייעודית המוגשת על ידי ModuleAutoprovision על גבי HTTP פשוט (ללא הפניית HTTPS).<br>טלפוני IP מורידים מהיציאה הזו את קובצי התצורה שלהם בזמן ההקצאה.<br>פתחו גישה רק לרשת המקומית שבה נמצאים הטלפונים.',
     'mo_ModuleAutoprovision' => 'The autoprovision module',
     'BreadcrumbModuleAutoprovision' => 'The autoprovision module',
     'SubHeaderModuleAutoprovision' => 'Bulk ip-phones setup',

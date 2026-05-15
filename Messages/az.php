@@ -14,6 +14,8 @@ return [
     'mod_Autoprovision_pbx_host' => 'Telefon qeydiyyatı üçün server ünvanı',
     'mod_Autoprovision_additional_params' => 'Əlavə seçimlər',
     'repModuleAutoprovision' => 'Modul - %represent%',
+    'fw_moduleautoprovisionDescription' => 'Avtoprovayder — IP telefonların konfiqurasiyasının HTTP üzərindən çatdırılması',
+    'fw_moduleautoprovisionDescriptionHint' => 'ModuleAutoprovision tərəfindən saf HTTP üzərindən təqdim edilən xüsusi TCP portu (HTTPS yönləndirməsi yoxdur).<br>IP telefonlar avtokonfiqurasiya zamanı öz konfiqurasiya fayllarını bu portdan götürür.<br>Girişi yalnız telefonların yerləşdiyi lokal şəbəkə üçün açın.',
     'mod_Autoprovision_header' => 'Modul işə salındıqda, "<b>apv-miko-pbx</b>" SIP hesabı ATS-də əlçatan olur.
 <br>Telefonunuzu avtomatik konfiqurasiya etmək üçün onu zavod parametrlərinə sıfırlamalısınız.
 <br>Əgər telefon ilk dəfə PBX-ə qoşularsa, o, "<b>apv-miko-pbx</b>" hesabına qeydiyyatdan keçəcək.

@@ -23,6 +23,8 @@ use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
 
 return [
     'repModuleAutoprovision'              => 'Модуль - %represent%',
+    'fw_moduleautoprovisionDescription' => 'Автопровижн — раздача конфигов IP-телефонам по HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Выделенный TCP-порт, который модуль ModuleAutoprovision обслуживает по чистому HTTP (без редиректа на HTTPS).<br>IP-телефоны забирают свои конфигурационные файлы с этого порта во время автонастройки.<br>Открывайте доступ только из локальной сети, к которой подключены телефоны.',
     'mo_ModuleAutoprovision'              => 'Модуль автоматической настройки телефонов',
     'BreadcrumbModuleAutoprovision'       => 'Модуль автоматической настройки телефонов',
     'SubHeaderModuleAutoprovision'        => 'Помощь в настройке SIP телефонов',

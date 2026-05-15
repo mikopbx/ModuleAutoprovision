@@ -9,6 +9,8 @@ return [
     'BreadcrumbModuleAutoprovision' => 'Modul de configurare automată a telefonului',
     'SubHeaderModuleAutoprovision' => 'Ajutor la configurarea telefoanelor SIP',
     'repModuleAutoprovision' => 'Modul - %represent%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - livrarea configurației telefoanelor prin HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Port TCP dedicat servit de ModuleAutoprovision prin HTTP simplu (fără redirecționare HTTPS).<br>Telefoanele IP descarcă fișierele lor de configurare de pe acest port în timpul provisionării.<br>Deschideți accesul doar pentru rețeaua locală în care se află telefoanele.',
     'mod_Autoprovision_Extension' => 'Șablon de extensie',
     'mod_Autoprovision_pbx_host' => 'Adresa serverului pentru înregistrarea telefonului',
     'mod_Autoprovision_mac_black' => 'Lista neagră MAC a telefonului',

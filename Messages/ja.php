@@ -11,6 +11,8 @@ return [
     'SubHeaderModuleAutoprovision' => 'SIP電話の設定を支援する',
     'mo_ModuleAutoprovision' => '自動電話セットアップモジュール',
     'repModuleAutoprovision' => 'モジュール-％represent％',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - HTTP経由での電話機設定配信',
+    'fw_moduleautoprovisionDescriptionHint' => 'ModuleAutoprovision が平文 HTTP (HTTPS リダイレクトなし) で提供する専用 TCP ポートです。<br>IP 電話はプロビジョニング時にこのポートから設定ファイルを取得します。<br>電話機が接続されているローカルネットワークに対してのみアクセスを許可してください。',
     'mod_Autoprovision_mac_black' => '電話のMACアドレスのブラックリスト',
     'mod_Autoprovision_pbx_host' => '電話登録用のサーバーアドレス',
     'BreadcrumbModuleAutoprovision' => '自動電話セットアップモジュール',

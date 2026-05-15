@@ -7,6 +7,8 @@ return [
  */
     'mod_Autoprovision_other_pbx_address' => 'PBX mrežna adresa',
     'repModuleAutoprovision' => 'Modul - %represent%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - isporuka konfiguracije telefona putem HTTP-a',
+    'fw_moduleautoprovisionDescriptionHint' => 'Namjenski TCP port koji ModuleAutoprovision poslužuje preko čistog HTTP-a (bez preusmjeravanja na HTTPS).<br>IP telefoni preuzimaju svoje konfiguracijske datoteke s ovog porta tijekom automatske konfiguracije.<br>Pristup otvorite samo lokalnoj mreži u kojoj se nalaze telefoni.',
     'mo_ModuleAutoprovision' => 'Modul za automatsku konfiguraciju telefona',
     'BreadcrumbModuleAutoprovision' => 'Modul za automatsku konfiguraciju telefona',
     'SubHeaderModuleAutoprovision' => 'Pomoć pri postavljanju SIP telefona',

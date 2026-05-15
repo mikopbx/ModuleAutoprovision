@@ -11,6 +11,8 @@ return [
     'mod_Autoprovision_pbx_host' => 'Διεύθυνση διακομιστή για εγγραφή τηλεφώνου',
     'mod_Autoprovision_Extension' => 'Πρότυπο επέκτασης',
     'repModuleAutoprovision' => 'Ενότητα Autoprovision',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - παράδοση ρυθμίσεων τηλεφώνων μέσω HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Αποκλειστική θύρα TCP που εξυπηρετείται από το ModuleAutoprovision μέσω απλού HTTP (χωρίς ανακατεύθυνση σε HTTPS).<br>Τα IP τηλέφωνα κατεβάζουν τα αρχεία ρυθμίσεών τους από αυτή τη θύρα κατά την αυτόματη ρύθμιση.<br>Ανοίξτε την πρόσβαση μόνο για το τοπικό δίκτυο στο οποίο βρίσκονται τα τηλέφωνα.',
     'SubHeaderModuleAutoprovision' => 'Βοήθεια στη ρύθμιση τηλεφώνων SIP',
     'BreadcrumbModuleAutoprovision' => 'Μονάδα αυτόματης διαμόρφωσης τηλεφώνου',
     'mo_ModuleAutoprovision' => 'Μονάδα αυτόματης διαμόρφωσης τηλεφώνου',

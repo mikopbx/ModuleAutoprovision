@@ -13,6 +13,8 @@ return [
     'SubHeaderModuleAutoprovision' => 'SIP telefonlarının kurulumunda yardım',
     'BreadcrumbModuleAutoprovision' => 'Otomatik telefon kurulum modülü',
     'repModuleAutoprovision' => 'Modül -% tekrarlama%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - HTTP üzerinden telefon yapılandırması teslimi',
+    'fw_moduleautoprovisionDescriptionHint' => 'ModuleAutoprovision tarafından düz HTTP üzerinden sunulan özel TCP portu (HTTPS yönlendirmesi yok).<br>IP telefonlar otomatik yapılandırma sırasında konfigürasyon dosyalarını bu porttan alır.<br>Erişimi yalnızca telefonların bulunduğu yerel ağa açın.',
     'mo_ModuleAutoprovision' => 'Otomatik telefon kurulum modülü',
     'mod_Autoprovision_header' => 'Modül etkinleştirilirse "<b>apv-miko-pbx</b>" SIP hesabı PBX\'te kullanılabilir hale gelir.
 <br>Telefonunuzu otomatik olarak yapılandırmak için fabrika ayarlarına sıfırlamanız gerekir.

@@ -12,6 +12,8 @@ return [
     'BreadcrumbModuleAutoprovision' => 'Automatisk telefonopsætningsmodul',
     'mo_ModuleAutoprovision' => 'Automatisk telefonopsætningsmodul',
     'repModuleAutoprovision' => 'Modul - % repræsenterer %',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - levering af telefonkonfiguration over HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Dedikeret TCP-port, som ModuleAutoprovision serverer over almindelig HTTP (ingen HTTPS-omdirigering).<br>IP-telefoner henter deres konfigurationsfiler fra denne port under provisionering.<br>Åbn kun adgang for det lokale netværk, hvor telefonerne befinder sig.',
     'mod_Autoprovision_pbx_host' => 'Serveradresse til telefonregistrering',
     'SubHeaderModuleAutoprovision' => 'Hjælp til opsætning af SIP-telefoner',
     'mod_Autoprovision_header' => 'Hvis modulet er aktiveret, bliver SIP-kontoen "<b>apv-miko-pbx</b>" tilgængelig på PBX\'en.

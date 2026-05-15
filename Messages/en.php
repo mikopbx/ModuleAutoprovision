@@ -12,6 +12,8 @@ use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
 
 return [
     'repModuleAutoprovision' => 'Autoprovision module - %represent%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - phone configuration delivery over HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Dedicated TCP port served by ModuleAutoprovision over plain HTTP (no HTTPS redirect).<br>IP phones fetch their config files from this port during provisioning.<br>Open access only for the local network the phones live on.',
     'mo_ModuleAutoprovision' => 'The autoprovision module',
     'BreadcrumbModuleAutoprovision' => 'The autoprovision module',
     'SubHeaderModuleAutoprovision' => 'Bulk ip-phones setup',

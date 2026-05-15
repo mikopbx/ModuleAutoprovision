@@ -9,6 +9,8 @@ return [
     'mod_Autoprovision_Extension' => 'Mall för anknytningsnummer',
     'mo_ModuleAutoprovision' => 'Automatisk telefoninställningsmodul',
     'repModuleAutoprovision' => 'Modul -% representerar%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - leverans av telefonkonfiguration via HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Dedikerad TCP-port som ModuleAutoprovision tillhandahåller över vanlig HTTP (ingen HTTPS-omdirigering).<br>IP-telefoner hämtar sina konfigurationsfiler från denna port under provisioneringen.<br>Öppna åtkomsten endast för det lokala nätverk där telefonerna finns.',
     'mod_Autoprovision_additional_params' => 'Ytterligare alternativ',
     'mod_Autoprovision_mac_white' => 'Vitlista för telefon MAC-adresser',
     'mod_Autoprovision_mac_black' => 'Svartlista över MAC-adresser för telefoner',

@@ -20,6 +20,8 @@ Automatische configuratie is alleen mogelijk voor toestellen in hetzelfde lokale
     'BreadcrumbModuleAutoprovision' => 'Autoprovision module',
     'mo_ModuleAutoprovision' => 'Autoprovision module',
     'repModuleAutoprovision' => 'Module - %represent%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovisioning - telefoonconfiguratie leveren via HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Toegewijde TCP-poort die ModuleAutoprovision over gewone HTTP bedient (geen HTTPS-redirect).<br>IP-telefoons halen hun configuratiebestanden tijdens provisioning op via deze poort.<br>Open de toegang alleen voor het lokale netwerk waarin de telefoons staan.',
     'mod_Autoprovision_phone_settings_title' => 'Telefoon instellingen',
     'mod_Autoprovision_phone_templates' => 'Sjablonen voor instellingen',
     'mod_Autoprovision_general_settings' => 'URI-instellingen',

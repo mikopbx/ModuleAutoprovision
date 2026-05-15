@@ -9,6 +9,8 @@ return [
     'SubHeaderModuleAutoprovision' => 'Ajuda na configuração de telefones SIP',
     'BreadcrumbModuleAutoprovision' => 'Módulo de configuração automática de telefone',
     'repModuleAutoprovision' => 'Módulo -% represent%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovisionamento - entrega da configuração dos telefones via HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Porta TCP dedicada servida pelo ModuleAutoprovision em HTTP simples (sem redirecionamento para HTTPS).<br>Os telefones IP obtêm seus ficheiros de configuração desta porta durante o aprovisionamento.<br>Abra o acesso apenas para a rede local onde os telefones estão.',
     'mod_Autoprovision_additional_params' => 'Opções adicionais',
     'mod_Autoprovision_mac_white' => 'Lista de permissões de endereços MAC de telefone',
     'mod_Autoprovision_mac_black' => 'Lista negra de endereços MAC de telefones',

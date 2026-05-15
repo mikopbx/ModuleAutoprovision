@@ -9,6 +9,8 @@ return [
     'mod_Autoprovision_other_pbx_name' => 'Alközpont neve',
     'mod_Autoprovision_other_pbx_address' => 'PBX hálózati cím',
     'repModuleAutoprovision' => 'Modul – %represent%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision – telefonkonfiguráció kiszolgálása HTTP-n',
+    'fw_moduleautoprovisionDescriptionHint' => 'Dedikált TCP-port, amelyet a ModuleAutoprovision egyszerű HTTP-n szolgál ki (HTTPS-átirányítás nélkül).<br>Az IP-telefonok a kiosztás során ezen a porton keresztül töltik le a konfigurációs fájljaikat.<br>A hozzáférést csak arra a helyi hálózatra nyissa meg, amelyben a telefonok vannak.',
     'mo_ModuleAutoprovision' => 'Automatikus telefon konfigurációs modul',
     'BreadcrumbModuleAutoprovision' => 'Automatikus telefon konfigurációs modul',
     'SubHeaderModuleAutoprovision' => 'Segítség a SIP telefonok beállításában',

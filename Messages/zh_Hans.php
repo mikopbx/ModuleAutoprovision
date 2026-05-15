@@ -14,6 +14,8 @@ return [
     'mod_Autoprovision_mac_white' => '手机MAC地址白名单',
     'BreadcrumbModuleAutoprovision' => '自动电话设置模块',
     'repModuleAutoprovision' => '模块 -% 表示%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - 通过 HTTP 分发电话配置',
+    'fw_moduleautoprovisionDescriptionHint' => 'ModuleAutoprovision 通过纯 HTTP（无 HTTPS 重定向）提供的专用 TCP 端口。<br>IP 电话在自动配置过程中从该端口获取其配置文件。<br>仅向电话所在的本地网络开放访问。',
     'mod_Autoprovision_header' => '如果启用该模块，SIP 帐户“<b>apv-miko-pbx</b>”将在 PBX 上可用。
 <br>要自动配置您的手机，您需要将其重置为出厂设置。
 <br>如果话机第一次连接PBX，会注册到“<b>apv-miko-pbx</b>”账户。

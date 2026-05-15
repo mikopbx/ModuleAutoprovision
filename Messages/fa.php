@@ -6,6 +6,8 @@ return [
  * Proprietary and confidential
  */
     'repModuleAutoprovision' => 'Autoprovision module - %represent%',
+    'fw_moduleautoprovisionDescription' => 'تأمین خودکار — تحویل پیکربندی تلفن از طریق HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'پورت TCP اختصاصی که توسط ModuleAutoprovision روی HTTP ساده ارائه می‌شود (بدون تغییر مسیر به HTTPS).<br>تلفن‌های IP فایل‌های پیکربندی خود را هنگام تأمین خودکار از این پورت دریافت می‌کنند.<br>دسترسی را فقط برای شبکه محلی که تلفن‌ها در آن قرار دارند باز کنید.',
     'mo_ModuleAutoprovision' => 'The autoprovision module',
     'BreadcrumbModuleAutoprovision' => 'The autoprovision module',
     'SubHeaderModuleAutoprovision' => 'Bulk ip-phones setup',

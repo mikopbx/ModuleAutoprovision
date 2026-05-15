@@ -32,6 +32,8 @@ Kuvio <b>805e0c67%</b> vastaa <b>805e0c670001</b> ja <b>805e0c670002</b>',
 <br><br>
 Automaattinen määritys on mahdollista vain yrityksen paikallisverkossa <b>Yealink-, Snom-, Fanvil</b>-puhelimissa.',
     'repModuleAutoprovision' => 'Moduuli - %represent%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - puhelinten asetusten toimitus HTTP:n yli',
+    'fw_moduleautoprovisionDescriptionHint' => 'Erillinen TCP-portti, jota ModuleAutoprovision palvelee tavallisella HTTP:llä (ei HTTPS-uudelleenohjausta).<br>IP-puhelimet hakevat konfiguraatiotiedostonsa tästä portista provisioinnin aikana.<br>Avaa pääsy vain sille paikallisverkolle, jossa puhelimet ovat.',
     'mo_ModuleAutoprovision' => 'Automaattinen puhelimen konfigurointimoduuli',
     'BreadcrumbModuleAutoprovision' => 'Automaattinen puhelimen konfigurointimoduuli',
     'SubHeaderModuleAutoprovision' => 'Apua SIP-puhelimien käyttöönotossa',

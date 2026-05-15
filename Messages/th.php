@@ -7,6 +7,8 @@ return [
  */
     'mod_Autoprovision_other_pbx_name' => 'ชื่อของการแลกเปลี่ยนทางโทรศัพท์',
     'repModuleAutoprovision' => 'โมดูล - % ตัวแทน%',
+    'fw_moduleautoprovisionDescription' => 'Autoprovision - การส่งการตั้งค่าโทรศัพท์ผ่าน HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'พอร์ต TCP เฉพาะที่ ModuleAutoprovision ให้บริการผ่าน HTTP ธรรมดา (ไม่มีการเปลี่ยนเส้นทางไป HTTPS)<br>โทรศัพท์ IP จะดึงไฟล์การตั้งค่าจากพอร์ตนี้ระหว่างการตั้งค่าอัตโนมัติ<br>เปิดการเข้าถึงเฉพาะเครือข่ายภายในที่โทรศัพท์ตั้งอยู่เท่านั้น',
     'mo_ModuleAutoprovision' => 'โมดูลการกำหนดค่าโทรศัพท์อัตโนมัติ',
     'BreadcrumbModuleAutoprovision' => 'โมดูลการกำหนดค่าโทรศัพท์อัตโนมัติ',
     'SubHeaderModuleAutoprovision' => 'ช่วยในการตั้งค่าโทรศัพท์ SIP',

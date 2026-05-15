@@ -13,6 +13,8 @@ return [
     'SubHeaderModuleAutoprovision' => 'Допомога в налаштуванні SIP телефонів',
     'BreadcrumbModuleAutoprovision' => 'Модуль автоматичного налаштування телефонів',
     'repModuleAutoprovision' => 'Модуль - %represent%',
+    'fw_moduleautoprovisionDescription' => 'Автопровіжн — роздача конфігурацій IP-телефонам через HTTP',
+    'fw_moduleautoprovisionDescriptionHint' => 'Виділений TCP-порт, який модуль ModuleAutoprovision обслуговує по чистому HTTP (без редиректу на HTTPS).<br>IP-телефони забирають свої конфігураційні файли з цього порту під час автоналаштування.<br>Відкривайте доступ лише з локальної мережі, до якої підключені телефони.',
     'mo_ModuleAutoprovision' => 'Модуль автоматичного налаштування телефонів',
     'mod_Autoprovision_header' => 'Якщо модуль увімкнено, то на АТС стає доступний обліковий запис SIP "apv-miko-pbx</b>".
 <br>Для автоматичного налаштування телефону необхідно скинути його до заводських налаштувань.
