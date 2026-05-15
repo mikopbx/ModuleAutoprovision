@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Modules\ModuleAutoprovision\Lib\RestAPI\Firmware\Actions;
 
-use MikoPBX\Core\System\Util;
+use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\PBXCoreREST\Lib\PBXApiResult;
 use Modules\ModuleAutoprovision\Lib\RestAPI\Firmware\Repository;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionFirmware;
@@ -61,7 +61,7 @@ class DeleteAction
             return $res;
         }
 
-        Util::sysLogMsg(
+        SystemMessages::sysLogMsg(
             'autoprovision-firmware',
             "delete id={$id} vendor={$vendor} file={$filename}",
             LOG_NOTICE

@@ -16,6 +16,7 @@ use MikoPBX\Core\Asterisk\AGI;
 use MikoPBX\Core\System\MikoPBXConfig;
 use MikoPBX\Core\System\Network;
 use MikoPBX\Core\System\Util;
+use MikoPBX\Core\System\SystemMessages;
 use Modules\ModuleAutoprovision\Lib\RestAPI\Firmware\Repository as FirmwareRepository;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionUsers;
@@ -133,7 +134,7 @@ class Autoprovision extends Injectable
 
         $sock = @socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
         if ($sock === false) {
-            Util::sysLogMsg(
+            SystemMessages::sysLogMsg(
                 WorkerProvisioningServerPnP::LOG_TAG,
                 "clientNotifyReboot: socket_create(SOCK_DGRAM) failed: " . socket_strerror(socket_last_error())
                     . " (target $ipPhone:$portPhone)",
@@ -165,14 +166,14 @@ class Autoprovision extends Injectable
 
         $sent = @socket_sendto($sock, $msg, strlen($msg), 0, $ipPhone, $portPhone);
         if ($sent === false) {
-            Util::sysLogMsg(
+            SystemMessages::sysLogMsg(
                 WorkerProvisioningServerPnP::LOG_TAG,
                 "clientNotifyReboot: socket_sendto $ipPhone:$portPhone failed: "
                     . socket_strerror(socket_last_error($sock)),
                 LOG_ERR
             );
         } else {
-            Util::sysLogMsg(
+            SystemMessages::sysLogMsg(
                 WorkerProvisioningServerPnP::LOG_TAG,
                 "clientNotifyReboot: check-sync NOTIFY sent to $ipPhone:$portPhone via $eth",
                 LOG_NOTICE

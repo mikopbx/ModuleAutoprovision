@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Modules\ModuleAutoprovision\Lib;
 
-use MikoPBX\Core\System\Util;
+use MikoPBX\Core\System\SystemMessages;
 use Modules\ModuleAutoprovision\Models\Templates;
 use Modules\ModuleAutoprovision\Models\TemplatesUri;
 use Throwable;
@@ -63,14 +63,14 @@ final class TemplateSeeder
                     continue;
                 }
             } catch (Throwable $e) {
-                Util::sysLogMsg(self::LOG_TAG, 'Failed to look up seed template: ' . $e->getMessage());
+                SystemMessages::sysLogMsg(self::LOG_TAG, 'Failed to look up seed template: ' . $e->getMessage());
                 $result['failed'][] = $seed['name'];
                 continue;
             }
 
             $path = $templatesDir . '/' . $seed['file'];
             if (!is_readable($path)) {
-                Util::sysLogMsg(self::LOG_TAG, "Seed template not readable: {$path}");
+                SystemMessages::sysLogMsg(self::LOG_TAG, "Seed template not readable: {$path}");
                 $result['failed'][] = $seed['name'];
                 continue;
             }
@@ -84,7 +84,7 @@ final class TemplateSeeder
             $template->name     = $seed['name'];
             $template->template = $body;
             if (!$template->save()) {
-                Util::sysLogMsg(self::LOG_TAG, "Failed to save seed template '{$seed['name']}'.");
+                SystemMessages::sysLogMsg(self::LOG_TAG, "Failed to save seed template '{$seed['name']}'.");
                 $result['failed'][] = $seed['name'];
                 continue;
             }
@@ -93,7 +93,7 @@ final class TemplateSeeder
             $uri->uri        = $seed['uri'];
             $uri->templateId = (string)$template->id;
             if (!$uri->save()) {
-                Util::sysLogMsg(self::LOG_TAG, "Failed to save URI mapping for '{$seed['name']}'.");
+                SystemMessages::sysLogMsg(self::LOG_TAG, "Failed to save URI mapping for '{$seed['name']}'.");
                 // Roll back the orphan template so the next seed attempt re-creates the pair
                 // cleanly — otherwise the name-collision skip at the top would permanently
                 // hide the missing URI mapping.

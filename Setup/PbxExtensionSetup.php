@@ -25,6 +25,7 @@ use MikoPBX\Common\Models\Extensions;
 use MikoPBX\Common\Models\PbxSettings;
 use MikoPBX\Core\System\Processes;
 use MikoPBX\Core\System\Util;
+use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Modules\Setup\PbxExtensionSetupBase;
 use Modules\ModuleAutoprovision\Lib\TemplateSeeder;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
@@ -95,7 +96,7 @@ class PbxExtensionSetup extends PbxExtensionSetupBase
             $this->db->commit();
         } else {
             $this->db->rollback();
-            Util::sysLogMsg(self::LOG_TAG, 'Failed to seed the Extensions table.');
+            SystemMessages::sysLogMsg(self::LOG_TAG, 'Failed to seed the Extensions table.');
             return false;
         }
 
@@ -117,7 +118,7 @@ class PbxExtensionSetup extends PbxExtensionSetupBase
                 return true;
             }
         } catch (Throwable $e) {
-            Util::sysLogMsg(self::LOG_TAG, 'Failed to inspect Templates table: ' . $e->getMessage());
+            SystemMessages::sysLogMsg(self::LOG_TAG, 'Failed to inspect Templates table: ' . $e->getMessage());
             return false;
         }
 
@@ -174,7 +175,7 @@ class PbxExtensionSetup extends PbxExtensionSetupBase
         foreach (['', '/yealink', '/snom', '/fanvil', '/grandstream', '/htek'] as $suffix) {
             $path = $base . $suffix;
             if (!is_dir($path) && !@mkdir($path, 0755, true) && !is_dir($path)) {
-                Util::sysLogMsg(self::LOG_TAG, "Failed to create firmware dir: {$path}");
+                SystemMessages::sysLogMsg(self::LOG_TAG, "Failed to create firmware dir: {$path}");
             }
         }
     }

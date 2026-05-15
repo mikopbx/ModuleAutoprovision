@@ -65,13 +65,13 @@ final class Repository
     public static function ensureBaseDir(): void
     {
         $base = self::baseDir();
-        if (!is_dir($base)) {
-            @mkdir($base, 0755, true);
+        if (!is_dir($base) && !mkdir($base, 0755, true) && !is_dir($base)) {
+            throw new \RuntimeException("Cannot create firmware base directory: {$base}");
         }
         foreach (array_keys(self::VENDOR_EXTENSIONS) as $vendor) {
             $dir = self::vendorDir($vendor);
-            if (!is_dir($dir)) {
-                @mkdir($dir, 0755, true);
+            if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+                throw new \RuntimeException("Cannot create vendor firmware directory: {$dir}");
             }
         }
     }

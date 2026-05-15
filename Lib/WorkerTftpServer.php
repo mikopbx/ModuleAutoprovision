@@ -15,7 +15,7 @@ use MikoPBX\Common\Handlers\CriticalErrorsHandler;
 use MikoPBX\Common\Models\PbxExtensionModules;
 use MikoPBX\Core\System\BeanstalkClient;
 use MikoPBX\Core\System\Processes;
-use MikoPBX\Core\System\Util;
+use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Core\Workers\WorkerBase;
 use Modules\ModuleAutoprovision\Lib\RestAPI\Firmware\Repository as FirmwareRepository;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
@@ -139,7 +139,7 @@ class WorkerTftpServer extends WorkerBase
     {
         $sock = @socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
         if ($sock === false) {
-            Util::sysLogMsg(
+            SystemMessages::sysLogMsg(
                 self::LOG_TAG,
                 'socket_create(SOCK_DGRAM) failed: ' . socket_strerror(socket_last_error())
                     . ' — TFTP server cannot start',
@@ -150,7 +150,7 @@ class WorkerTftpServer extends WorkerBase
         socket_set_option($sock, SOL_SOCKET, SO_REUSEADDR, 1);
         if (!@socket_bind($sock, '0.0.0.0', self::PORT)) {
             $err = socket_strerror(socket_last_error($sock));
-            Util::sysLogMsg(
+            SystemMessages::sysLogMsg(
                 self::LOG_TAG,
                 'socket_bind(0.0.0.0:' . self::PORT . ') failed: ' . $err
                     . ' — another TFTP server may already be running, or the process lacks CAP_NET_BIND_SERVICE',
@@ -161,7 +161,7 @@ class WorkerTftpServer extends WorkerBase
         }
         $this->mainSocket = $sock;
 
-        Util::sysLogMsg(
+        SystemMessages::sysLogMsg(
             self::LOG_TAG,
             sprintf(
                 'TFTP server ready on 0.0.0.0:%d pid=%d firmware_dir=%s',
@@ -224,7 +224,7 @@ class WorkerTftpServer extends WorkerBase
 
         $opcode = (ord($buf[0]) << 8) | ord($buf[1]);
         if ($opcode === self::OP_WRQ) {
-            Util::sysLogMsg(self::LOG_TAG, "WRQ from $from:$port rejected (read-only server)", LOG_NOTICE);
+            SystemMessages::sysLogMsg(self::LOG_TAG, "WRQ from $from:$port rejected (read-only server)", LOG_NOTICE);
             $this->sendErrorTo($this->mainSocket, $from, $port, self::ERR_ILLEGAL_OP, 'Write not supported');
             return;
         }
@@ -234,7 +234,7 @@ class WorkerTftpServer extends WorkerBase
         }
 
         if (count($this->sessions) >= self::MAX_SESSIONS) {
-            Util::sysLogMsg(
+            SystemMessages::sysLogMsg(
                 self::LOG_TAG,
                 "RRQ from $from:$port refused: session cap MAX_SESSIONS=" . self::MAX_SESSIONS . ' reached',
                 LOG_WARNING
@@ -257,7 +257,7 @@ class WorkerTftpServer extends WorkerBase
 
         $resolved = $this->resolveFile($filename, $from);
         if ($resolved === null) {
-            Util::sysLogMsg(
+            SystemMessages::sysLogMsg(
                 self::LOG_TAG,
                 sprintf('RRQ %s from %s:%d -> file not found', $filename, $from, $port),
                 LOG_NOTICE
@@ -269,13 +269,13 @@ class WorkerTftpServer extends WorkerBase
         // Per-session ephemeral socket so the supervisor can keep listening on 69.
         $sessionSock = @socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
         if ($sessionSock === false) {
-            Util::sysLogMsg(
+            SystemMessages::sysLogMsg(
                 self::LOG_TAG,
                 'socket_create for session failed: ' . socket_strerror(socket_last_error()),
                 LOG_ERR
             );
-            if ($resolved['tempfile']) {
-                @unlink($resolved['path']);
+            if ($resolved['tempfile'] && is_file($resolved['path'])) {
+                unlink($resolved['path']);
             }
             return;
         }
@@ -283,10 +283,10 @@ class WorkerTftpServer extends WorkerBase
 
         $fh = @fopen($resolved['path'], 'rb');
         if ($fh === false) {
-            Util::sysLogMsg(self::LOG_TAG, "fopen failed for {$resolved['path']}", LOG_ERR);
+            SystemMessages::sysLogMsg(self::LOG_TAG, "fopen failed for {$resolved['path']}", LOG_ERR);
             socket_close($sessionSock);
-            if ($resolved['tempfile']) {
-                @unlink($resolved['path']);
+            if ($resolved['tempfile'] && is_file($resolved['path'])) {
+                unlink($resolved['path']);
             }
             $this->sendErrorTo($this->mainSocket, $from, $port, self::ERR_ACCESS, 'Cannot read file');
             return;
@@ -312,7 +312,7 @@ class WorkerTftpServer extends WorkerBase
             'awaiting_oack_ack' => false,
         ];
 
-        Util::sysLogMsg(
+        SystemMessages::sysLogMsg(
             self::LOG_TAG,
             sprintf(
                 'RRQ %s from %s:%d accepted (size=%d blksize=%d %s)',
@@ -375,7 +375,7 @@ class WorkerTftpServer extends WorkerBase
         if ($opcode === self::OP_ERROR) {
             $errCode = $n >= 4 ? ((ord($buf[2]) << 8) | ord($buf[3])) : -1;
             $msg     = $n > 4 ? rtrim(substr($buf, 4), "\0") : '';
-            Util::sysLogMsg(
+            SystemMessages::sysLogMsg(
                 self::LOG_TAG,
                 "Client {$session['client_ip']}:{$session['client_port']} sent ERROR code=$errCode msg='$msg' — closing session",
                 LOG_NOTICE
@@ -408,7 +408,7 @@ class WorkerTftpServer extends WorkerBase
         // ACK for the last block. If the just-acked block was a short read
         // (size < blksize), the transfer is complete.
         if ($session['last_block_size'] < $session['blksize']) {
-            Util::sysLogMsg(
+            SystemMessages::sysLogMsg(
                 self::LOG_TAG,
                 sprintf(
                     'Transfer complete: %s -> %s:%d (%d blocks, last_size=%d)',
@@ -440,7 +440,7 @@ class WorkerTftpServer extends WorkerBase
             }
 
             if ($session['retries'] >= self::MAX_RETRIES) {
-                Util::sysLogMsg(
+                SystemMessages::sysLogMsg(
                     self::LOG_TAG,
                     sprintf(
                         'Session %s timed out after %d retries (%s -> %s:%d)',
@@ -787,12 +787,14 @@ class WorkerTftpServer extends WorkerBase
         }
         $s = $this->sessions[$key];
         if ($s['fh'] !== null && is_resource($s['fh'])) {
-            @fclose($s['fh']);
+            fclose($s['fh']);
         }
-        if ($s['tempfile'] !== null) {
-            @unlink($s['tempfile']);
+        if ($s['tempfile'] !== null && is_file($s['tempfile'])) {
+            unlink($s['tempfile']);
         }
-        @socket_close($s['sock']);
+        if (is_resource($s['sock'])) {
+            socket_close($s['sock']);
+        }
         unset($this->sessions[$key]);
     }
 

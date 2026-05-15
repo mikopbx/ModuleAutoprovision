@@ -13,7 +13,7 @@ use MikoPBX\Common\Models\Extensions;
 use MikoPBX\Common\Models\Sip;
 use MikoPBX\Common\Models\Users;
 use MikoPBX\Core\System\Network;
-use MikoPBX\Core\System\Util;
+use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Modules\PbxExtensionUtils;
 use MikoPBX\PBXCoreREST\Controllers\Modules\ModulesControllerBase;
 use MikoPBX\Common\Library\Text;
@@ -32,6 +32,8 @@ use Modules\ModuleUsersGroups\Models\UsersGroups;
 
 class GetController extends ModulesControllerBase
 {
+    private const LOG_TAG = 'autoprovision-http';
+
     /**
      * https://standards-oui.ieee.org/oui/oui.txt
      */
@@ -40,6 +42,33 @@ class GetController extends ModulesControllerBase
         '44DBD2' => 'YEALINK',
         '0C383E' => 'FANVIL',
     ];
+
+    /**
+     * Emits one structured access-log line for a phone provisioning request.
+     *
+     * Centralising this means every code path logs the same fields — client IP
+     * first (the question the operator asks is always "which phone hit us?"),
+     * then HTTP code, URI, User-Agent and any path-specific context (matched
+     * MAC, bytes streamed, template name). The TFTP and PnP workers already
+     * log at this resolution; the HTTP channel now matches.
+     */
+    private function logHttpRequest(int $code, array $extra = [], int $priority = LOG_NOTICE): void
+    {
+        $clientIp  = (string)$this->request->getClientAddress(true);
+        $userAgent = (string)$this->request->getHeader('User-Agent');
+        $uri       = (string)($_REQUEST['_url'] ?? '');
+
+        $parts = ["ip={$clientIp}", "code={$code}", "uri={$uri}"];
+        foreach ($extra as $k => $v) {
+            if ($v === null || $v === '') {
+                continue;
+            }
+            $parts[] = "{$k}={$v}";
+        }
+        $parts[] = 'ua=' . ($userAgent !== '' ? $userAgent : '-');
+
+        SystemMessages::sysLogMsg(self::LOG_TAG, implode(' ', $parts), $priority);
+    }
 
     /**
      * curl 'http://127.0.0.1/pbxcore/api/autoprovision-http/1/2/3'
@@ -54,7 +83,7 @@ class GetController extends ModulesControllerBase
         if($uri === '/phonebook' || $uri === '/yealink'){
             $this->echoPhoneBookYealink($uri);
             $this->response->sendRaw();
-            Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url'].', code: 200');
+            $this->logHttpRequest(200, ['kind' => 'phonebook-yealink']);
             // exit() short-circuits the Micro afterExecuteRoute / ResponseMiddleware chain.
             // Without it, the custom Response::send() wraps the streamed body with a
             // trailing {"meta":{"timestamp":..,"hash":..}} envelope, which corrupts the
@@ -63,7 +92,7 @@ class GetController extends ModulesControllerBase
         }elseif ($uri === '/grandstream'){
             $this->echoPhoneBookGrandStream($uri);
             $this->response->sendRaw();
-            Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url'].', code: 200');
+            $this->logHttpRequest(200, ['kind' => 'phonebook-grandstream']);
             $this->terminateStreamedResponse();
         }
         $manager = $this->di->get('modelsManager');
@@ -113,10 +142,13 @@ class GetController extends ModulesControllerBase
             ];
             $rendered = strtr($template, $genericReplacements);
             if (preg_match('/\{SIP_(USER_NAME|NUM|PASS)\}/', $rendered) === 1) {
-                Util::sysLogMsg(
-                    'autoprovision-http',
-                    'URI template ' . $_REQUEST['_url'] . ' still contains {SIP_*} placeholders'
-                        . ' — these are only resolvable on the per-MAC route, not the URI route.',
+                $this->logHttpRequest(
+                    200,
+                    [
+                        'kind'     => 'uri-template',
+                        'template' => $result[0]['name'] ?? '',
+                        'warn'     => 'unresolved-sip-placeholder',
+                    ],
                     LOG_WARNING
                 );
             }
@@ -128,14 +160,18 @@ class GetController extends ModulesControllerBase
             $this->response->sendHeaders();
             echo $rendered;
             $this->response->sendRaw();
-            Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url']. ', code: 200');
+            $this->logHttpRequest(200, [
+                'kind'     => 'uri-template',
+                'template' => $result[0]['name'] ?? '',
+                'bytes'    => strlen($rendered),
+            ]);
             $this->terminateStreamedResponse();
         }
         $pattern = '/([0-9A-Fa-f]{2}[:-]?){5}([0-9A-Fa-f]{2})/i';
         if (preg_match_all($pattern, $_REQUEST['_url'], $matches)) {
             $mac = $matches[0][0]??'';
             if(stripos($userAgent, 'yealink') !== false && stripos($uri, '.boot')!==false){
-                Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url']. ', code: 404');
+                $this->logHttpRequest(404, ['kind' => 'yealink-boot-ignored', 'mac' => $mac]);
                 $this->response->setStatusCode(404, 'Ignore boot config yealink');
                 $this->response->sendRaw();
                 $this->terminateStreamedResponse();
@@ -221,12 +257,18 @@ class GetController extends ModulesControllerBase
                 $this->response->setHeader('Content-Transfer-Encoding', "binary");
                 $this->response->sendHeaders();
                 echo $config;
-                Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url'].', code: 200');
+                $this->logHttpRequest(200, [
+                    'kind'   => 'per-mac',
+                    'mac'    => $mac,
+                    'vendor' => $vendor !== null ? (string)$vendor : '',
+                    'model'  => $model ?? '',
+                    'bytes'  => strlen($config),
+                ]);
                 $this->terminateStreamedResponse();
             }
         }
 
-        Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url']. ', code: 404');
+        $this->logHttpRequest(404, ['mac' => $mac ?? '']);
         $this->response->setStatusCode(404, 'Not found');
         $this->response->sendRaw();
         $this->terminateStreamedResponse();
@@ -370,7 +412,7 @@ class GetController extends ModulesControllerBase
                         $phoneBook.= $xmlContent.PHP_EOL;
                     }
                 }else{
-                    Util::sysLogMsg('autoprovision-http', "Fail get phonebook from $address, code: $code");
+                    SystemMessages::sysLogMsg(self::LOG_TAG, "Fail get phonebook from $address, code: $code", LOG_WARNING);
                 }
             }
             unset($otherPbx);
