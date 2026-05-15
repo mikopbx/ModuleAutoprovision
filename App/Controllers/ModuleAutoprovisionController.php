@@ -70,9 +70,15 @@ class ModuleAutoprovisionController extends BaseController
             ->addJs('js/vendor/semantic/modal.min.js', true);
 
         $footerJs = $this->assets->collection(AssetProvider::FOOTER_JS);
+        // Resumable.js powers the chunked firmware upload. FilesAPI and the
+        // FileUploadEventHandler globals are already in the default authenticated
+        // bundle (see AssetProvider::makeDefaultAssets); only Resumable itself
+        // is opt-in per page.
         $footerJs
+            ->addJs('js/vendor/resumable.js', true)
             ->addJs('js/pbx/main/form.js', true)
-            ->addJs('js/cache/' . self::MODULE_UNIQUE_ID . '/module-autoprovision.js', true);
+            ->addJs('js/cache/' . self::MODULE_UNIQUE_ID . '/module-autoprovision.js', true)
+            ->addJs('js/cache/' . self::MODULE_UNIQUE_ID . '/module-autoprovision-firmware.js', true);
 
         $settings = ModuleAutoprovision::findFirst() ?? new ModuleAutoprovision();
         $this->view->form = new ModuleAutoprovisionForm($settings);

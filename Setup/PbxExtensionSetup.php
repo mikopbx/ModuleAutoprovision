@@ -165,14 +165,33 @@ class PbxExtensionSetup extends PbxExtensionSetupBase
     }
 
     /**
-     * Copies module files into the system tree and grants execute permission to AGI scripts.
+     * Copies module files into the system tree, grants execute permission to AGI scripts,
+     * and ensures the firmware repository directory tree exists.
      */
     public function installFiles(): bool
     {
         // Use escapeshellarg to defend against unexpected characters in moduleDir.
         Processes::mwExec('chmod +x ' . escapeshellarg($this->moduleDir . '/agi-bin') . '/*');
         parent::installFiles();
+        $this->ensureFirmwareDir();
         return true;
+    }
+
+    /**
+     * Creates the firmware repository under <moduleDir>/firmware/<vendor>/.
+     *
+     * Module dir can move between MikoPBX versions (USB key reseat, factory reset),
+     * so the upload action also re-creates the dir on every call as a cheap defence.
+     */
+    private function ensureFirmwareDir(): void
+    {
+        $base = $this->moduleDir . '/firmware';
+        foreach (['', '/yealink', '/snom', '/fanvil', '/grandstream', '/htek'] as $suffix) {
+            $path = $base . $suffix;
+            if (!is_dir($path) && !@mkdir($path, 0755, true) && !is_dir($path)) {
+                Util::sysLogMsg(self::LOG_TAG, "Failed to create firmware dir: {$path}");
+            }
+        }
     }
 
     /**

@@ -16,6 +16,7 @@ use MikoPBX\Core\Asterisk\AGI;
 use MikoPBX\Core\System\MikoPBXConfig;
 use MikoPBX\Core\System\Network;
 use MikoPBX\Core\System\Util;
+use Modules\ModuleAutoprovision\Lib\RestAPI\Firmware\Repository as FirmwareRepository;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionUsers;
 use Phalcon\Di\Injectable;
@@ -94,6 +95,17 @@ class Autoprovision extends Injectable
                 $sipData['5'] = $defPeer;
             }
         }
+
+        // Resolve {FIRMWARE_URL} once and surface it to every vendor generator
+        // through $req_data so the per-vendor classes emit the correct config
+        // key ('firmware.url' for Yealink, '<AUTOUPDATE>FirmwareUpgrade' for
+        // Fanvil, P192/P237 for Grandstream, 'auto_image_url' for Htek, etc.).
+        // Empty string when no matching firmware row exists — generators must
+        // suppress the line in that case.
+        $req_data['firmware_url'] = FirmwareRepository::resolveFirmwareUrl(
+            (string)($req_data['vendor'] ?? ''),
+            isset($req_data['model']) ? (string)$req_data['model'] : null
+        );
 
         $confManager = match ($req_data['vendor'] ?? '') {
             'yealink'     => new AutoprovisionYealink(),

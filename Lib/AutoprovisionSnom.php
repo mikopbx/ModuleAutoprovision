@@ -50,6 +50,14 @@ class AutoprovisionSnom extends Autoprovision implements ConfManager
         }
         $cfg .= "        <answer_after_policy perm=\"RW\">idle</answer_after_policy>\n";
 
+        // Snom firmware override — empty when no firmware row registered.
+        $firmwareUrl = (string)($req_data['firmware_url'] ?? '');
+        if ($firmwareUrl !== '') {
+            $cfg .= "        <firmware perm=\"RW\">"
+                . htmlspecialchars($firmwareUrl, ENT_XML1)
+                . "</firmware>\n";
+        }
+
         $cfg .= ($s['snom-phone-settings'] ?? '') . "\n";
         $cfg .= '    </phone-settings>' . "\n";
         $cfg .= '</settings>' . "\n";

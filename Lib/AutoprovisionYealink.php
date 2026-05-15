@@ -94,6 +94,13 @@ class AutoprovisionYealink extends Autoprovision implements ConfManager
         // Enable or disable the headset prior feature; 0-Disabled (default), 1-Enabled;
         $cfg .= "features.headset_prior = 1\r\n";
 
+        // Vendor firmware URL — emitted only when a matching firmware row was
+        // registered by the admin. Yealink's reference key is `firmware.url`.
+        $firmwareUrl = (string)($req_data['firmware_url'] ?? '');
+        if ($firmwareUrl !== '') {
+            $cfg .= "firmware.url = {$firmwareUrl}\r\n";
+        }
+
         $cfg .= ($s['yealink'] ?? '') . "\n";
         file_put_contents($filename, $cfg);
 
