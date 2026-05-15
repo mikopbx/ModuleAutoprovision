@@ -28,6 +28,8 @@ return [
     'SubHeaderModuleAutoprovision'        => 'Помощь в настройке SIP телефонов',
     'mod_Autoprovision_Extension'         => 'Шаблон внутреннего номера',
     'mod_Autoprovision_pbx_host'          => 'Адрес сервера для регистрации телефонов',
+    'mod_Autoprovision_http_port'         => 'TCP-порт автопровижинга (HTTP)',
+    'mod_Autoprovision_http_port_hint'    => 'Отдельный порт модуля для отдачи конфигов по HTTP — не подпадает под глобальный редирект на HTTPS. Телефоны должны обращаться к PBX по этому порту; правило файрвола добавляется автоматически.',
     'mod_Autoprovision_mac_black'         => 'Черный список MAC адресов телефонов',
     'mod_Autoprovision_mac_white'         => 'Белый список MAC адресов телефонов',
     'mod_Autoprovision_additional_params' => 'Дополнительные параметры',

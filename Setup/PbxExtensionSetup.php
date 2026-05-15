@@ -66,6 +66,11 @@ class PbxExtensionSetup extends PbxExtensionSetupBase
             $settings->sip_secret = bin2hex(random_bytes(16));
         }
 
+        if (empty($settings->http_port)) {
+            // Unprivileged port that doesn't clash with WEBPort/WEBHTTPSPort or SIP.
+            $settings->http_port = '8480';
+        }
+
         $result = $settings->save();
 
         if ($result) {

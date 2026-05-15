@@ -17,6 +17,8 @@ return [
     'SubHeaderModuleAutoprovision' => 'Bulk ip-phones setup',
     'mod_Autoprovision_Extension' => 'Provision pattern command',
     'mod_Autoprovision_pbx_host' => 'The PBX DNS name',
+    'mod_Autoprovision_http_port' => 'Provisioning HTTP port',
+    'mod_Autoprovision_http_port_hint' => 'Dedicated TCP port served by the module on plain HTTP (no HTTPS redirect). Phones must reach the PBX on this port; firewall is opened automatically.',
     'mod_Autoprovision_mac_black' => 'Black MAC address list',
     'mod_Autoprovision_mac_white' => 'White MAC address list',
     'mod_Autoprovision_additional_params' => 'Additional settings',

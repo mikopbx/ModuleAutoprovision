@@ -68,6 +68,16 @@ class ModuleAutoprovision extends ModulesModelsBase
     public $sip_secret;
 
     /**
+     * TCP port for the module's dedicated HTTP listener.
+     * Served by a separate nginx server-block so phones bypass the global
+     * HTTPS redirect of the admin UI. Stored as string to match Phalcon's
+     * conventional column types for this module.
+     *
+     * @Column(type="string", nullable=true)
+     */
+    public $http_port;
+
+    /**
      * Returns dynamic relations between module models and common models
      * MikoPBX check it in ModelsBase after every call to keep data consistent
      *

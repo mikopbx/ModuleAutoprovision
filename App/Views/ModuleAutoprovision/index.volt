@@ -58,6 +58,12 @@
         </div>
 
         <div class="eight wide field">
+          <label>{{ t._('mod_Autoprovision_http_port') }}</label>
+          {{ form.render('http_port') }}
+          <div class="ui small note">{{ t._('mod_Autoprovision_http_port_hint') }}</div>
+        </div>
+
+        <div class="eight wide field">
           <div class="ui equal width grid">
               <div class="column">
                   <label>{{ t._('mod_Autoprovision_mac_white') }}</label>

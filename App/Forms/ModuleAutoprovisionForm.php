@@ -20,6 +20,7 @@ class ModuleAutoprovisionForm extends Form
     {
         $this->add(new Text('extension'));
         $this->add(new Text('pbx_host'));
+        $this->add(new Text('http_port'));
         $this->add(new TextArea('mac_black'));
         $this->add(new TextArea('mac_white'));
         $this->add(new TextArea('additional_params'));

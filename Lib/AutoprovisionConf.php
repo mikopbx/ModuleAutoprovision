@@ -10,7 +10,12 @@ declare(strict_types=1);
 
 namespace Modules\ModuleAutoprovision\Lib;
 
+use MikoPBX\Common\Models\FirewallRules;
+use MikoPBX\Core\System\Configs\NginxConf;
 use MikoPBX\Core\Workers\Cron\WorkerSafeScriptsCore;
+use MikoPBX\Core\Workers\Libs\WorkerModelsEvents\Actions\ReloadFirewallAction;
+use MikoPBX\Core\Workers\Libs\WorkerModelsEvents\Actions\ReloadNginxAction;
+use MikoPBX\Core\Workers\WorkerModelsEvents;
 use MikoPBX\Modules\Config\ConfigClass;
 use MikoPBX\PBXCoreREST\Lib\PBXApiResult;
 use Modules\ModuleAutoprovision\Lib\RestAPI\Controllers\GetController;
@@ -21,6 +26,11 @@ class AutoprovisionConf extends ConfigClass
 {
     public const SIP_USER     = 'apv-miko-pbx';
     public const BASE_URI     = '/pbxcore/api/autoprovision-http';
+
+    // Fallback port used when settings haven't been seeded yet (e.g. between
+    // schema creation and PbxExtensionSetup::installDB() finishing). Same value
+    // is written into the DB as the default at install time.
+    public const DEFAULT_HTTP_PORT = 8480;
 
     private const ALLOWED_IMG_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico', 'dob'];
 
@@ -37,6 +47,26 @@ class AutoprovisionConf extends ConfigClass
             return self::SIP_USER;
         }
         return $secret;
+    }
+
+    /**
+     * Returns the TCP port served by the module's dedicated nginx server-block.
+     *
+     * Falls back to {@see self::DEFAULT_HTTP_PORT} when the value in the DB is
+     * missing or invalid — keeps the firewall rule and the nginx block in sync
+     * even on partially-upgraded installs.
+     */
+    public static function getHttpPort(): int
+    {
+        $settings = ModuleAutoprovision::findFirst();
+        $raw      = trim((string)($settings->http_port ?? ''));
+        if ($raw === '') {
+            return self::DEFAULT_HTTP_PORT;
+        }
+        $port = filter_var($raw, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1024, 'max_range' => 65535],
+        ]);
+        return $port === false ? self::DEFAULT_HTTP_PORT : $port;
     }
 
     /**
@@ -82,14 +112,51 @@ class AutoprovisionConf extends ConfigClass
     /**
      * Reloads dialplan + SIP after the settings page saved new configuration.
      * Invoked from the JS layer via /pbxcore/api/modules/ModuleAutoprovision/reload.
+     *
+     * Also refreshes the firewall rows + nginx server-block in case the admin
+     * changed http_port — without this, the new port wouldn't open in iptables
+     * nor be picked up by the dedicated nginx listener until the next module
+     * enable cycle.
      */
     private function reloadProvisioning(): PBXApiResult
     {
+        $this->syncFirewallPort();
         PBX::dialplanReload();
         PBX::sipReload();
+        WorkerModelsEvents::invokeAction(ReloadNginxAction::class);
+        WorkerModelsEvents::invokeAction(ReloadFirewallAction::class);
+
         $res          = new PBXApiResult();
         $res->success = true;
         return $res;
+    }
+
+    /**
+     * Brings the existing FirewallRules rows in line with the current http_port.
+     *
+     * The rows are first seeded by PbxExtensionState::enableFirewallSettings on
+     * module enable; once they exist this method keeps them in sync with the
+     * user-edited port so {@see ReloadFirewallAction} regenerates iptables with
+     * the correct value. New rows are only created if none exist yet (fallback
+     * for upgrades from versions that never had this hook).
+     */
+    private function syncFirewallPort(): void
+    {
+        $port  = (string)self::getHttpPort();
+        $rules = FirewallRules::findByCategory('MODULEAUTOPROVISION');
+        if ($rules->count() === 0) {
+            return;
+        }
+        foreach ($rules as $rule) {
+            if ($rule->portfrom === $port && $rule->portto === $port) {
+                continue;
+            }
+            $rule->portfrom    = $port;
+            $rule->portto      = $port;
+            $rule->portFromKey = 'AutoprovisionHttpPort';
+            $rule->portToKey   = 'AutoprovisionHttpPort';
+            $rule->save();
+        }
     }
 
     private function getProvisionConfig(array $request): PBXApiResult
@@ -279,5 +346,77 @@ class AutoprovisionConf extends ConfigClass
         $workerPath = Util::getFilePathByClassName(WorkerProvisioningServerPnP::class);
         $phpPath    = Util::which('php');
         Processes::mwExec(escapeshellarg($phpPath) . ' -f ' . escapeshellarg($workerPath));
+    }
+
+    /**
+     * Builds the dedicated nginx server-block that serves provisioning configs
+     * over plain HTTP on {@see self::getHttpPort()}.
+     *
+     * Phones generally cannot follow the admin UI's HTTPS redirect — a separate
+     * listener bypasses it without patching the core nginx template. The block
+     * exposes only {@see self::BASE_URI}/* and the small assets endpoint used
+     * by the module (`/pbxcore/api/autoprovision/getimg`); the rest of /pbxcore
+     * stays behind the main listener so this port does not become an admin
+     * back-door.
+     */
+    public function createNginxServers(): string
+    {
+        $port    = self::getHttpPort();
+        $baseUri = self::BASE_URI;
+
+        // Server-block is isolated (no shared `~ \.php$` handler), so we route
+        // each accepted URI to a single internal location that talks to PHP-FPM
+        // directly. Explicit `last` flag re-runs location matching after the
+        // rewrite, landing on the `= /pbxcore/index.php` internal location.
+        $content = <<<NGINX
+    location ^~ {$baseUri}/ {
+        rewrite ^/pbxcore/(.*)\$ /pbxcore/index.php?_url=/\$1 last;
+    }
+
+    location ~ ^/pbxcore/api/autoprovision/(getcfg|getimg)\$ {
+        rewrite ^/pbxcore/(.*)\$ /pbxcore/index.php?_url=/\$1 last;
+    }
+
+    location = /pbxcore/index.php {
+        internal;
+        fastcgi_pass unix:/var/run/php-fpm.sock;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /usr/www/sites/pbxcore/index.php;
+    }
+
+    # Everything else on this port is intentionally inaccessible.
+    location / {
+        return 404;
+    }
+NGINX;
+
+        return NginxConf::buildServerBlock($port, false, $content);
+    }
+
+    /**
+     * Opens the provisioning port in the firewall so phones can reach it.
+     *
+     * Returned as a single allow rule under category "Autoprovision". The core
+     * IptablesConf layer picks this up via {@see PBXConfModulesProvider} hooks
+     * (see GET_DEFAULT_FIREWALL_RULES).
+     */
+    public function getDefaultFirewallRules(): array
+    {
+        $port = (string)self::getHttpPort();
+        return [
+            'ModuleAutoprovision' => [
+                'rules' => [
+                    [
+                        'portfrom' => $port,
+                        'portto'   => $port,
+                        'protocol' => 'tcp',
+                        'name'     => 'AutoprovisionHttpPort',
+                    ],
+                ],
+                'action'    => 'allow',
+                'shortName' => 'Autoprovision',
+            ],
+        ];
     }
 }

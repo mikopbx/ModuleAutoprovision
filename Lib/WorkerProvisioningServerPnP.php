@@ -51,7 +51,9 @@ class WorkerProvisioningServerPnP extends WorkerBase
 
         $data = ModuleAutoprovision::findFirst();
         $this->debug       = ($debug === true);
-        $http_port         = $mikoPBXConfig->getGeneralSettings('WEBPort');
+        // The module serves provisioning on its own nginx server-block to bypass
+        // the global HTTPS redirect — see AutoprovisionConf::createNginxServers().
+        $http_port         = AutoprovisionConf::getHttpPort();
         $this->pbx_version = $mikoPBXConfig->getGeneralSettings('PBXVersion');
         $this->interfaces  = $network->getInterfacesNames();
 
