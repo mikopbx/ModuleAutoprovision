@@ -6,6 +6,7 @@
       <a class="item" data-tab="general-settings">{{ t._('mod_Autoprovision_general_settings') }}</a>
       <a class="item" data-tab="other-pbx">{{ t._('mod_Autoprovision_other_pbx') }}</a>
       <a class="item" data-tab="pnp">{{ t._('mod_Autoprovision_pnp') }}</a>
+      <a class="item" data-tab="firmware">{{ t._('mod_Autoprovision_firmware') }}</a>
     </div>
 
     <div class="ui bottom attached tab segment" data-tab="other-pbx">
@@ -257,6 +258,108 @@
 
         </tbody>
       </table>
+    </div>
+
+    <div class="ui bottom attached tab segment" data-tab="firmware">
+        <div class="ui message">{{ t._('mod_Autoprovision_firmware_header') }}</div>
+
+        <div id="firmware-dropzone" class="ui placeholder segment" style="cursor: pointer;">
+            <div class="ui icon header">
+                <i class="upload icon"></i>
+                {{ t._('mod_Autoprovision_firmware_drop_hint') }}
+            </div>
+            <div class="ui primary button" id="firmware-browse">
+                <i class="folder open icon"></i>
+                {{ t._('mod_Autoprovision_firmware_browse') }}
+            </div>
+        </div>
+
+        <div class="ui form" style="margin-top: 1em;">
+            <div class="four fields">
+                <div class="field">
+                    <label>{{ t._('mod_Autoprovision_firmware_vendor') }}</label>
+                    <select id="firmware-vendor" class="ui dropdown">
+                        <option value="yealink">Yealink</option>
+                        <option value="snom">Snom</option>
+                        <option value="fanvil">Fanvil</option>
+                        <option value="grandstream">Grandstream</option>
+                        <option value="htek">Htek</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>{{ t._('mod_Autoprovision_firmware_model') }}</label>
+                    <input id="firmware-model" type="text" placeholder="T46S">
+                </div>
+                <div class="field">
+                    <label>{{ t._('mod_Autoprovision_firmware_version') }}</label>
+                    <input id="firmware-version" type="text" placeholder="66.86.0.15">
+                </div>
+                <div class="field">
+                    <label>{{ t._('mod_Autoprovision_firmware_notes') }}</label>
+                    <input id="firmware-notes" type="text">
+                </div>
+            </div>
+        </div>
+
+        <div id="firmware-progress" class="ui small indicating progress" data-percent="0" style="margin: 1em 0;">
+            <div class="bar"><div class="progress"></div></div>
+            <div class="label"></div>
+        </div>
+
+        <table id="firmware-table" class="ui celled table">
+            <thead><tr>
+                <th>{{ t._('mod_Autoprovision_firmware_vendor') }}</th>
+                <th>{{ t._('mod_Autoprovision_firmware_model') }}</th>
+                <th>{{ t._('mod_Autoprovision_firmware_filename') }}</th>
+                <th>{{ t._('mod_Autoprovision_firmware_version') }}</th>
+                <th>{{ t._('mod_Autoprovision_firmware_size') }}</th>
+                <th>{{ t._('mod_Autoprovision_firmware_sha256') }}</th>
+                <th class="collapsing right aligned"></th>
+            </tr></thead>
+            <tbody></tbody>
+        </table>
+        <div id="firmware-totals" class="ui small text"></div>
+
+        <div id="firmware-edit-modal" class="ui modal">
+            <i class="close icon"></i>
+            <div class="header">{{ t._('mod_Autoprovision_firmware_edit_title') }}</div>
+            <div class="content">
+                <div class="ui form">
+                    <input type="hidden" id="firmware-edit-id" value="">
+                    <div class="two fields">
+                        <div class="field">
+                            <label>{{ t._('mod_Autoprovision_firmware_vendor') }}</label>
+                            <select id="firmware-edit-vendor" class="ui dropdown">
+                                <option value="yealink">Yealink</option>
+                                <option value="snom">Snom</option>
+                                <option value="fanvil">Fanvil</option>
+                                <option value="grandstream">Grandstream</option>
+                                <option value="htek">Htek</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>{{ t._('mod_Autoprovision_firmware_model') }}</label>
+                            <input id="firmware-edit-model" type="text">
+                        </div>
+                    </div>
+                    <div class="two fields">
+                        <div class="field">
+                            <label>{{ t._('mod_Autoprovision_firmware_version') }}</label>
+                            <input id="firmware-edit-version" type="text">
+                        </div>
+                        <div class="field">
+                            <label>{{ t._('mod_Autoprovision_firmware_notes') }}</label>
+                            <input id="firmware-edit-notes" type="text">
+                        </div>
+                    </div>
+                    <div id="firmware-edit-error" class="ui red message" style="display: none;"></div>
+                </div>
+            </div>
+            <div class="actions">
+                <div class="ui cancel button">{{ t._('mod_Autoprovision_firmware_cancel') }}</div>
+                <div id="firmware-edit-save" class="ui positive button">{{ t._('mod_Autoprovision_firmware_save') }}</div>
+            </div>
+        </div>
     </div>
 
     {{ partial("partials/submitbutton",['indexurl':'pbx-extension-modules/index/']) }}

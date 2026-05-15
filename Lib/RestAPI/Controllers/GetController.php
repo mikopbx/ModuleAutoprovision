@@ -17,7 +17,9 @@ use MikoPBX\Core\System\Util;
 use MikoPBX\Modules\PbxExtensionUtils;
 use MikoPBX\PBXCoreREST\Controllers\Modules\ModulesControllerBase;
 use MikoPBX\Common\Library\Text;
+use Modules\ModuleAutoprovision\Lib\RestAPI\Firmware\Repository as FirmwareRepository;
 use Modules\ModuleAutoprovision\Lib\Transliterate;
+use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 use Modules\ModuleAutoprovision\Models\OtherPBX;
 use Modules\ModuleAutoprovision\Models\Templates;
 use Modules\ModuleAutoprovision\Models\TemplatesUri;
@@ -160,6 +162,25 @@ class GetController extends ModulesControllerBase
                 if(!empty($resultSip)){
                     $data = $resultSip[0];
                 }
+
+                // Firmware URL placeholder. Vendor is sniffed from the User-Agent
+                // (every supported phone family includes its brand there) and the
+                // exact model comes from the device row keyed by MAC. Missing data
+                // resolves to empty string, which lets templates wrap the line in
+                // a vendor-specific conditional if needed.
+                $vendor = $this->detectVendorFromUserAgent((string)$userAgent);
+                $model  = null;
+                if ($mac !== '') {
+                    $device = ModuleAutoprovisionDevice::findFirst([
+                        'mac = :mac:',
+                        'bind' => ['mac' => $mac],
+                    ]);
+                    if ($device !== null && !empty($device->manufacturer_model)) {
+                        $model = $this->extractModel((string)$device->manufacturer_model);
+                    }
+                }
+                $data['{FIRMWARE_URL}'] = FirmwareRepository::resolveFirmwareUrl($vendor, $model);
+
                 $config = str_replace(array_keys($data), array_values($data), $result[0]['template']);
                 $this->response->setHeader('Content-Description', "config file");
                 $this->response->setHeader('Content-Disposition', "attachment; filename=".basename($uri));
@@ -370,6 +391,57 @@ class GetController extends ModulesControllerBase
         $this->response->setHeader('Content-Transfer-Encoding', "binary");
         $this->response->sendHeaders();
         echo $phoneBook;
+    }
+
+    /**
+     * Best-effort vendor key derived from the User-Agent string sent by the phone.
+     *
+     * Every supported phone family identifies itself in User-Agent (Yealink, Snom,
+     * Fanvil, Grandstream, Htek). Returns '' if no known brand matches — callers
+     * then resolve {FIRMWARE_URL} to an empty string instead of guessing.
+     */
+    private function detectVendorFromUserAgent(string $userAgent): string
+    {
+        $ua = strtolower($userAgent);
+        foreach (['yealink', 'snom', 'fanvil', 'grandstream', 'htek'] as $vendor) {
+            if (str_contains($ua, $vendor)) {
+                return $vendor;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Extracts the model name from ModuleAutoprovisionDevice.manufacturer_model.
+     *
+     * PnP populates the field as "Vendor / Model" (e.g. "Fanvil / X3SP V2") and
+     * some models contain spaces, so we can't just take the last whitespace token
+     * — that would shrink "X3SP V2" to "V2". When a "/" separator is present we
+     * take everything after it; otherwise we drop a leading vendor word that
+     * matches one of the known vendors and keep the rest. Returns null when the
+     * field is empty.
+     */
+    private function extractModel(string $manufacturerModel): ?string
+    {
+        $raw = trim($manufacturerModel);
+        if ($raw === '') {
+            return null;
+        }
+
+        $slash = strpos($raw, '/');
+        if ($slash !== false) {
+            $tail = trim(substr($raw, $slash + 1));
+            return $tail === '' ? null : $tail;
+        }
+
+        // No separator: strip a leading known-vendor token if present.
+        $parts = preg_split('/\s+/', $raw) ?: [];
+        if ($parts !== [] && in_array(strtolower($parts[0]), ['yealink', 'snom', 'fanvil', 'grandstream', 'htek'], true)) {
+            array_shift($parts);
+        }
+        $tail = implode(' ', $parts);
+        $tail = trim($tail);
+        return $tail === '' ? null : $tail;
     }
 
     private function camelize(string $inputString): string

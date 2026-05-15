@@ -63,4 +63,18 @@ The template <b>805e0c67%</b> will match <b>805e0c670001</b> and <b>805e0c670002
     'mod_Autoprovision_templates_uri_header' => '<b>Warning!</b> All URIs are resolved relative to the base value <b>'.AutoprovisionConf::BASE_URI.'</b><br>
 When describing a URI you may use the symbol <b>%</b> meaning "any set of characters". <br>
 The URI <b>/%/%/test.cfg</b> will match <b>/1/2/test.cfg</b> and <b>/test/test3/test.cfg</b>',
+    'mod_Autoprovision_firmware' => 'Firmware',
+    'mod_Autoprovision_firmware_header' => 'Upload phone firmware blobs that this PBX will serve to phones over HTTP on the provisioning port. Use the <b>{FIRMWARE_URL}</b> placeholder in your templates to inject the download URL.',
+    'mod_Autoprovision_firmware_drop_hint' => 'Drag a firmware file here or click to choose',
+    'mod_Autoprovision_firmware_browse' => 'Choose file',
+    'mod_Autoprovision_firmware_vendor' => 'Vendor',
+    'mod_Autoprovision_firmware_model' => 'Model',
+    'mod_Autoprovision_firmware_version' => 'Version',
+    'mod_Autoprovision_firmware_notes' => 'Notes',
+    'mod_Autoprovision_firmware_filename' => 'File',
+    'mod_Autoprovision_firmware_size' => 'Size',
+    'mod_Autoprovision_firmware_sha256' => 'SHA-256',
+    'mod_Autoprovision_firmware_edit_title' => 'Edit firmware metadata',
+    'mod_Autoprovision_firmware_save' => 'Save',
+    'mod_Autoprovision_firmware_cancel' => 'Cancel',
 ];

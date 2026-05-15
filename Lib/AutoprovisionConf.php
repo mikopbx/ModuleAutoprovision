@@ -361,13 +361,18 @@ class AutoprovisionConf extends ConfigClass
      */
     public function createNginxServers(): string
     {
-        $port    = self::getHttpPort();
-        $baseUri = self::BASE_URI;
+        $port        = self::getHttpPort();
+        $baseUri     = self::BASE_URI;
+        $firmwareDir = $this->moduleDir . '/firmware';
 
         // Server-block is isolated (no shared `~ \.php$` handler), so we route
         // each accepted URI to a single internal location that talks to PHP-FPM
         // directly. Explicit `last` flag re-runs location matching after the
         // rewrite, landing on the `= /pbxcore/index.php` internal location.
+        //
+        // The /firmware/ alias serves phone firmware blobs straight from disk;
+        // proxying them through PHP would OOM the worker on a 40 MB Yealink T5x
+        // .rom file. Read-only by design — uploads go through the v3 REST path.
         $content = <<<NGINX
     location ^~ {$baseUri}/ {
         rewrite ^/pbxcore/(.*)\$ /pbxcore/index.php?_url=/\$1 last;
@@ -375,6 +380,17 @@ class AutoprovisionConf extends ConfigClass
 
     location ~ ^/pbxcore/api/autoprovision/(getcfg|getimg)\$ {
         rewrite ^/pbxcore/(.*)\$ /pbxcore/index.php?_url=/\$1 last;
+    }
+
+    location ^~ /firmware/ {
+        alias {$firmwareDir}/;
+        autoindex off;
+        add_header Cache-Control "public, max-age=3600";
+        # Log every phone fetch through the OS syslog under the autoprovision-firmware
+        # tag — the file is served by nginx without touching PHP, so PHP-side
+        # Util::sysLogMsg() can't see these requests. Requires nginx ≥ 1.7.1.
+        access_log syslog:server=unix:/dev/log,tag=autoprovision-firmware combined;
+        limit_except GET HEAD { deny all; }
     }
 
     location = /pbxcore/index.php {

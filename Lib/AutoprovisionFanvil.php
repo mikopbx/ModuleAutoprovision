@@ -75,6 +75,14 @@ class AutoprovisionFanvil extends Autoprovision implements ConfManager
         $cfg_arr[] = 'PNP Port           :5060';
         $cfg_arr[] = 'PNP Transport      :0';
         $cfg_arr[] = 'PNP Interval       :1';
+        // Fanvil firmware URL key. Two-image phones split between application
+        // image and configuration; we only set the firmware ('app') URL —
+        // admins can override via additional_params if they need both.
+        $firmwareUrl = (string)($req_data['firmware_url'] ?? '');
+        if ($firmwareUrl !== '') {
+            $cfg_arr[] = 'Upgrade Mode       :2';
+            $cfg_arr[] = 'App URL            :' . $firmwareUrl;
+        }
         $cfg_arr[] = ($s['fanvil-autoupdate'] ?? '') . "\n";
         $cfg_arr[] = '<<END OF FILE>>';
 

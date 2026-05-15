@@ -65,6 +65,12 @@ class AutoprovisionHtek extends Autoprovision implements ConfManager
         $featureAttendedTransfer = $this->mikoPBXConfig->getGeneralSettings('PBXFeatureAttendedTransfer');
         $cfg .= "features.dtmf.transfer = {$featureAttendedTransfer}\r\n";
 
+        // Htek auto-image URL — the Htek firmware server config key.
+        $firmwareUrl = (string)($req_data['firmware_url'] ?? '');
+        if ($firmwareUrl !== '') {
+            $cfg .= "auto_image_url = {$firmwareUrl}\r\n";
+        }
+
         $cfg .= ($s['htek'] ?? '') . "\n";
         file_put_contents($filename, $cfg);
 

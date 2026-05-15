@@ -76,5 +76,20 @@ URI <b>/%/%/test.cfg</b> будет соответствовать <b>/1/2/test.
 <br>Если телефон подключается к АТС впервые, то он будет зарегистрирован на учетной записи "<b>apv-miko-pbx</b>".
 <br>Для настройки телефона необходимо с него позвонить на номер "<b>%extension%</b>", где XXX - это внутренний номер на АТС.
 <br><br>
-Автонастройка возможна только для локальной сети предприятия, для телефонов <b>Yealink, Snom, Fanvil</b>.'
+Автонастройка возможна только для локальной сети предприятия, для телефонов <b>Yealink, Snom, Fanvil</b>.',
+
+    'mod_Autoprovision_firmware'             => 'Прошивки',
+    'mod_Autoprovision_firmware_header'      => 'Загрузите файлы прошивок, которые АТС будет отдавать телефонам по HTTP с провижининг-порта. В шаблонах используйте плейсхолдер <b>{FIRMWARE_URL}</b>, чтобы вставить URL для загрузки.',
+    'mod_Autoprovision_firmware_drop_hint'   => 'Перетащите файл прошивки сюда или нажмите, чтобы выбрать',
+    'mod_Autoprovision_firmware_browse'      => 'Выбрать файл',
+    'mod_Autoprovision_firmware_vendor'      => 'Производитель',
+    'mod_Autoprovision_firmware_model'       => 'Модель',
+    'mod_Autoprovision_firmware_version'     => 'Версия',
+    'mod_Autoprovision_firmware_notes'       => 'Заметки',
+    'mod_Autoprovision_firmware_filename'    => 'Файл',
+    'mod_Autoprovision_firmware_size'        => 'Размер',
+    'mod_Autoprovision_firmware_sha256'      => 'SHA-256',
+    'mod_Autoprovision_firmware_edit_title'  => 'Редактирование метаданных прошивки',
+    'mod_Autoprovision_firmware_save'        => 'Сохранить',
+    'mod_Autoprovision_firmware_cancel'      => 'Отмена',
 ];

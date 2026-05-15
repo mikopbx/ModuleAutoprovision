@@ -61,6 +61,15 @@ class AutoprovisionGrandstream extends Autoprovision implements ConfManager
         // переподписывался на чужой провижн-сервер после первой настройки.
         $cfg .= "        <P1359>0</P1359>\n";
 
+        // Grandstream firmware: P192 is the firmware server URL, P237 forces
+        // HTTP (1) instead of TFTP (0). Only set when a row exists; otherwise
+        // the phone keeps using its current upgrade settings.
+        $firmwareUrl = (string)($req_data['firmware_url'] ?? '');
+        if ($firmwareUrl !== '') {
+            $cfg .= "        <P192>" . htmlspecialchars($firmwareUrl, ENT_XML1) . "</P192>\n";
+            $cfg .= "        <P237>1</P237>\n";
+        }
+
         $extra = trim($s['grandstream'] ?? '');
         if ($extra !== '') {
             $cfg .= $extra . "\n";
