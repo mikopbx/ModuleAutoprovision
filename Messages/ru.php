@@ -19,8 +19,6 @@ declare(strict_types=1);
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
-
 return [
     'repModuleAutoprovision'              => 'Модуль - %represent%',
     'fw_moduleautoprovisionDescription' => 'Автопровижн — раздача конфигов IP-телефонам по HTTP',
@@ -65,13 +63,13 @@ return [
     'mod_Autoprovision_other_pbx_name'  => 'Наименование АТС',
     'mod_Autoprovision_other_pbx_address'  => 'Сетевой адрес АТС',
     'mod_Autoprovision_templates_header'  => 'При описании шаблона допускается использовать параметры: <b>{SIP_USER_NAME}</b> - имя сотрудника <b>{SIP_NUM}</b>  - внутренний номер (логин) <b>{SIP_PASS}</b>  - пароль',
-    'mod_Autoprovision_other_pbx_header'  => '<b>Внимание!</b> Телефонная книга должна быть доступна для каждой АТС по URI <b>'.AutoprovisionConf::BASE_URI.'/phonebook</b><br> 
+    'mod_Autoprovision_other_pbx_header'  => '<b>Внимание!</b> Телефонная книга должна быть доступна для каждой АТС по URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br> 
 Перечислите все адреса, АТС, с которых необходимо получить телефонную книгу. <br> ',
 
     'mod_Autoprovision_templates_users_header'  => 'При описании MAC адреса допускается использовать символ <b>%</b> - означающий "любой набор символов" <br>
 Шаблон <b>805e0c67%</b> будет соответствовать <b>805e0c670001</b> и <b>805e0c670002</b>',
 
-    'mod_Autoprovision_templates_uri_header'=> '<b>Внимание!</b> Все URI строятся относительно базового значения <b>'.AutoprovisionConf::BASE_URI.'</b><br> 
+    'mod_Autoprovision_templates_uri_header'=> '<b>Внимание!</b> Все URI строятся относительно базового значения <b>/pbxcore/api/autoprovision-http</b><br> 
 При описании URI допускается использовать символ <b>%</b> - означающий "любой набор символов" <br>
 URI <b>/%/%/test.cfg</b> будет соответствовать <b>/1/2/test.cfg</b>  и <b>/test/test3/test.cfg</b>',
 
