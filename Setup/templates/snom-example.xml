@@ -11,4 +11,6 @@
         <user_srtp idx="1" perm="RW">off</user_srtp>
         <answer_after_policy perm="RW">idle</answer_after_policy>
     </phone-settings>
+    <!-- Uncomment after uploading firmware in the Firmware tab.
+         <firmware perm="RW">{FIRMWARE_URL}</firmware> -->
 </settings>

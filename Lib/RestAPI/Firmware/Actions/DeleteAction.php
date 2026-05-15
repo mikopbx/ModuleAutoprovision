@@ -17,9 +17,19 @@ use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionFirmware;
 /**
  * Removes a firmware row plus its on-disk blob.
  *
- * Deletes the file first; if that fails (already gone, permission issue) we
- * still drop the DB row — a dangling DB entry would keep handing out a 404 URL
- * to phones, which is worse than a missing file the admin can re-upload.
+ * Two firmware rows can legitimately share `(vendor, filename)` — for example a
+ * vendor-wide row (`model = ''`) plus a model-specific row both pointing at the
+ * same `.rom`. Unconditionally unlinking on delete would nuke the file the
+ * surviving row still serves over HTTP/TFTP, returning 404 to phones. So:
+ *   1. Hold the upload flock (LOCK_EX) — uploads/replaces grab the same lock,
+ *      so a concurrent upload that would point a new row at this filename
+ *      cannot race us between the count and the unlink.
+ *   2. Count other rows referencing `(vendor, filename)` excluding our id.
+ *   3. Only unlink when the count is zero.
+ *
+ * The DB row is dropped unconditionally — a dangling DB entry pointing at a
+ * missing file would keep handing out 404 URLs to phones, worse than just
+ * missing the file the admin can re-upload.
  */
 class DeleteAction
 {
@@ -46,30 +56,67 @@ class DeleteAction
         $filename = (string)$row->filename;
         $target   = Repository::vendorDir($vendor) . '/' . $filename;
 
-        if (file_exists($target)) {
-            @unlink($target);
-        }
-
-        if (!$row->delete()) {
-            $res->httpCode = 500;
-            foreach ($row->getMessages() as $msg) {
-                $res->messages['error'][] = (string)$msg;
+        // Take the same exclusive lock UploadAction/ReplaceAction use so a
+        // concurrent upload pointing a fresh row at this same filename can't
+        // squeeze in between the reference-count and the unlink.
+        Repository::ensureBaseDir();
+        $lockHandle = @fopen(Repository::lockFile(), 'c');
+        if ($lockHandle === false || !flock($lockHandle, LOCK_EX)) {
+            if ($lockHandle !== false) {
+                fclose($lockHandle);
             }
-            if (empty($res->messages['error'])) {
-                $res->messages['error'][] = 'failed to delete firmware row';
-            }
+            $res->httpCode            = 500;
+            $res->messages['error'][] = 'failed to acquire firmware upload lock';
             return $res;
         }
 
-        SystemMessages::sysLogMsg(
-            'autoprovision-firmware',
-            "delete id={$id} vendor={$vendor} file={$filename}",
-            LOG_NOTICE
-        );
+        try {
+            $otherRefs = ModuleAutoprovisionFirmware::count([
+                'vendor = :vendor: AND filename = :filename: AND id != :id:',
+                'bind' => ['vendor' => $vendor, 'filename' => $filename, 'id' => $id],
+            ]);
 
-        $res->success  = true;
-        $res->httpCode = 200;
-        $res->data     = ['id' => $id, 'deleted' => true];
-        return $res;
+            $fileRemoved = false;
+            if ((int)$otherRefs === 0 && file_exists($target)) {
+                $fileRemoved = @unlink($target);
+            }
+
+            if (!$row->delete()) {
+                $res->httpCode = 500;
+                foreach ($row->getMessages() as $msg) {
+                    $res->messages['error'][] = (string)$msg;
+                }
+                if (empty($res->messages['error'])) {
+                    $res->messages['error'][] = 'failed to delete firmware row';
+                }
+                return $res;
+            }
+
+            SystemMessages::sysLogMsg(
+                'autoprovision-firmware',
+                sprintf(
+                    'delete id=%d vendor=%s file=%s other_refs=%d file_unlinked=%d',
+                    $id,
+                    $vendor,
+                    $filename,
+                    (int)$otherRefs,
+                    (int)$fileRemoved
+                ),
+                LOG_NOTICE
+            );
+
+            $res->success  = true;
+            $res->httpCode = 200;
+            $res->data     = [
+                'id'             => $id,
+                'deleted'        => true,
+                'file_unlinked'  => $fileRemoved,
+                'other_refs'     => (int)$otherRefs,
+            ];
+            return $res;
+        } finally {
+            flock($lockHandle, LOCK_UN);
+            fclose($lockHandle);
+        }
     }
 }

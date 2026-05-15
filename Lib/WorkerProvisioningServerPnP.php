@@ -117,7 +117,15 @@ class WorkerProvisioningServerPnP extends WorkerBase
         // Общий воркер статует всегда все скрипты с компндой start
         if ($action === 'socket_server' || $action === 'start') {
             $this->client_queue = new BeanstalkClient();
-            $this->client_queue->subscribe('ping_' . self::class, [$this, 'pingCallBack']);
+            // Subscribe to the canonical ping tube name (camelized in WorkerBase).
+            // The previous literal `'ping_' . self::class` produced a different
+            // string than `makePingTubeName()` builds, so SafeScripts' pings
+            // landed in a tube nobody read and the worker was restarted every
+            // cycle (40s "processed more than 36 seconds" warning loop).
+            $this->client_queue->subscribe(
+                $this->makePingTubeName(self::class),
+                [$this, 'pingCallBack']
+            );
             $this->listen();
         } elseif ($action === 'socket_client') {
             $ip   = $argv[2] ?? '127.0.0.1';
@@ -313,8 +321,51 @@ class WorkerProvisioningServerPnP extends WorkerBase
 
         SystemMessages::sysLogMsg(self::LOG_TAG, 'PnP listener ready on ' . self::BROAD_CAST_IP . ':5060', LOG_NOTICE);
 
+        // Swallow the benign EINTR warning that fires when SIGTERM/SIGUSR1
+        // interrupts socket_select() — otherwise WorkerBase::shutdownHandler
+        // sees it via error_get_last() and emits a noisy LOG_ERR
+        // [SHUTDOWN-ERROR] line on every graceful restart.
+        set_error_handler(static function (int $errno, string $errstr) {
+            if (str_contains($errstr, 'Interrupted system call')) {
+                return true;
+            }
+            return false;
+        }, E_WARNING);
+
         do {
-            if (socket_recv($sock, $packet, 10240, 0)) {
+            // Multiplex the raw socket and the beanstalk ping tube via
+            // socket_select with a short (1s) timeout. The previous
+            // implementation called the blocking socket_recv() in a tight
+            // loop and only drained beanstalk *after* a UDP packet landed —
+            // on a network with no PnP-broadcasting phones the ping tube
+            // could go unread for 30+ seconds, tripping WorkerSafeScripts'
+            // 10s warning and the 5s reply timeout, causing needless restart
+            // cycles. The short select cap keeps the supervisor's pings
+            // healthy while still spending most of the cycle parked in the
+            // kernel (one wakeup/sec is negligible).
+            $read   = [$sock];
+            $write  = null;
+            $except = null;
+            $n = @socket_select($read, $write, $except, 1, 0);
+
+            if ($n === false) {
+                $errNo = socket_last_error();
+                // SIGUSR1 / SIGTERM trip EINTR — silent, not an error. Clearing
+                // PHP's last-error registry too so WorkerBase::shutdownHandler
+                // doesn't report a SHUTDOWN-ERROR on graceful restart.
+                if (defined('SOCKET_EINTR') && $errNo === SOCKET_EINTR) {
+                    socket_clear_error();
+                    error_clear_last();
+                } elseif ($errNo !== 0) {
+                    SystemMessages::sysLogMsg(
+                        self::LOG_TAG,
+                        'socket_select() failed: ' . socket_strerror($errNo)
+                            . ' (errno=' . $errNo . ')',
+                        LOG_ERR
+                    );
+                    socket_clear_error();
+                }
+            } elseif ($n > 0 && in_array($sock, $read, true) && socket_recv($sock, $packet, 10240, 0)) {
                 // Получаем данные пакета.
                 $ihl      = ord($packet[0]) & 0xf;
                 $payload  = substr($packet, $ihl << 2);
@@ -342,7 +393,14 @@ class WorkerProvisioningServerPnP extends WorkerBase
                     $this->send_response($headers);
                 }
             }
-            $this->client_queue->wait(); // instead of sleep
+
+            // Drain any pending supervisor ping. wait(0) is non-blocking — if
+            // there is nothing in the tube it returns immediately.
+            try {
+                $this->client_queue->wait(0);
+            } catch (\Throwable) {
+                // Beanstalk hiccups must not crash the PnP server.
+            }
         } while (true);
     }
 

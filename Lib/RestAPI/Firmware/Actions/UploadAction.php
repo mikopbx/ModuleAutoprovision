@@ -69,8 +69,20 @@ class UploadAction
             return $res;
         }
 
-        $rawName  = basename($sourcePath);
-        $filename = Repository::sanitizeFilename($rawName);
+        // Core's Resumable.js merge step strips dots from the filename it stores
+        // on disk (e.g. `T48S-66.86.0.11.rom` → `T48S-668601`), so we let the
+        // client send the original filename alongside the merged blob's file_id
+        // and prefer it when it passes the sanitiser. Falling back to the merged
+        // basename keeps backwards compatibility with older UIs that don't carry
+        // `original_filename`.
+        $originalName = isset($data['original_filename']) ? (string)$data['original_filename'] : '';
+        $candidate    = $originalName !== '' ? Repository::sanitizeFilename($originalName) : '';
+        if ($candidate !== '') {
+            $filename = $candidate;
+        } else {
+            $rawName  = basename($sourcePath);
+            $filename = Repository::sanitizeFilename($rawName);
+        }
         if ($filename === '') {
             $res->httpCode            = 400;
             $res->messages['error'][] = 'empty or invalid filename';

@@ -17,4 +17,7 @@ SIP1 Register Pswd :{SIP_PASS}
 SIP1 Caller Id Type:4
 P1 Enable Intercom :1
 
+# Uncomment after uploading firmware in the Firmware tab.
+# Auto Image Url     :{FIRMWARE_URL}
+
 <<END OF FILE>>

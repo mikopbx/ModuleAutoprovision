@@ -10,14 +10,13 @@ declare(strict_types=1);
 
 namespace Modules\ModuleAutoprovision\Lib\RestAPI\Controllers;
 use MikoPBX\Common\Models\Extensions;
-use MikoPBX\Common\Models\Sip;
 use MikoPBX\Common\Models\Users;
 use MikoPBX\Core\System\Network;
 use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Modules\PbxExtensionUtils;
 use MikoPBX\PBXCoreREST\Controllers\Modules\ModulesControllerBase;
 use MikoPBX\Common\Library\Text;
-use Modules\ModuleAutoprovision\Lib\RestAPI\Firmware\Repository as FirmwareRepository;
+use Modules\ModuleAutoprovision\Lib\Autoprovision;
 use Modules\ModuleAutoprovision\Lib\Transliterate;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
@@ -25,7 +24,6 @@ use Modules\ModuleAutoprovision\Models\OtherPBX;
 use Modules\ModuleAutoprovision\Models\Templates;
 use Modules\ModuleAutoprovision\Models\TemplatesUri;
 use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
-use Modules\ModuleAutoprovision\Models\TemplatesUsers;
 use GuzzleHttp\Client;
 use Modules\ModuleUsersGroups\Models\GroupMembers;
 use Modules\ModuleUsersGroups\Models\UsersGroups;
@@ -135,12 +133,7 @@ class GetController extends ModulesControllerBase
             $template = (string)$result[0]['template'];
 
             $vendor   = $this->detectVendorFromUserAgent((string)$userAgent);
-            $settings = ModuleAutoprovision::findFirst();
-            $genericReplacements = [
-                '{FIRMWARE_URL}' => FirmwareRepository::resolveFirmwareUrl($vendor, null),
-                '{PBX_HOST}'     => $settings !== null ? (string)($settings->pbx_host ?? '') : '',
-            ];
-            $rendered = strtr($template, $genericReplacements);
+            $rendered = Autoprovision::applyGenericPlaceholders($template, $vendor, null);
             if (preg_match('/\{SIP_(USER_NAME|NUM|PASS)\}/', $rendered) === 1) {
                 $this->logHttpRequest(
                     200,
@@ -177,80 +170,12 @@ class GetController extends ModulesControllerBase
                 $this->terminateStreamedResponse();
             }
 
-            $parameters = [
-                'models'     => [
-                    'TemplatesUsers' => TemplatesUsers::class,
-                ],
-                'conditions' => ':mac: LIKE TemplatesUsers.mac',
-                'bind' => [
-                    'mac'  => $mac,
-                ],
-                'columns'    => [
-                    'id'            => 'TemplatesUsers.id',
-                    'template'      => 'Templates.template',
-                    'userId'        => 'TemplatesUsers.userId',
-                ],
-                'limit' => 1,
-                'joins'      => [
-                    'TemplatesUsers' => [
-                        0 => Templates::class,
-                        1 => 'Templates.id = TemplatesUsers.templateId',
-                        2 => 'Templates',
-                        3 => 'LEFT',
-                    ],
-                ],
-            ];
-            $result = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
-            if(!empty($result)) {
-                $parameters = [
-                    'models'     => [
-                        'Extensions' => Extensions::class,
-                    ],
-                    'conditions' => ':userid: = Extensions.userid',
-                    'bind' => [
-                        'userid'  => $result[0]['userId'],
-                    ],
-                    'columns'    => [
-                        '{SIP_USER_NAME}'     => 'Extensions.callerid',
-                        '{SIP_NUM}'           => 'Extensions.number',
-                        '{SIP_PASS}'          => 'Sip.secret',
-                    ],
-                    'ORDER' => 'mac DESC',
-                    'limit' => 1,
-                    'joins'      => [
-                        'Extensions' => [
-                            0 => Sip::class,
-                            1 => 'Extensions.number = Sip.extension',
-                            2 => 'Sip',
-                            3 => 'LEFT',
-                        ],
-                    ],
-                ];
-                $resultSip = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
-                $data = [ '{SIP_NUM}' => '', '{SIP_USER_NAME}' => '', '{SIP_PASS}' => ''];
-                if(!empty($resultSip)){
-                    $data = $resultSip[0];
-                }
-
-                // Firmware URL placeholder. Vendor is sniffed from the User-Agent
-                // (every supported phone family includes its brand there) and the
-                // exact model comes from the device row keyed by MAC. Missing data
-                // resolves to empty string, which lets templates wrap the line in
-                // a vendor-specific conditional if needed.
+            // Render via the shared per-MAC renderer — the same function the
+            // TFTP worker calls. Keeps the HTTP and TFTP channels byte-identical
+            // for any MAC that has a TemplatesUsers mapping.
+            $config = Autoprovision::renderTemplateConfig($mac, (string)$userAgent);
+            if ($config !== null) {
                 $vendor = $this->detectVendorFromUserAgent((string)$userAgent);
-                $model  = null;
-                if ($mac !== '') {
-                    $device = ModuleAutoprovisionDevice::findFirst([
-                        'mac = :mac:',
-                        'bind' => ['mac' => $mac],
-                    ]);
-                    if ($device !== null && !empty($device->manufacturer_model)) {
-                        $model = $this->extractModel((string)$device->manufacturer_model);
-                    }
-                }
-                $data['{FIRMWARE_URL}'] = FirmwareRepository::resolveFirmwareUrl($vendor, $model);
-
-                $config = str_replace(array_keys($data), array_values($data), $result[0]['template']);
                 $this->response->setHeader('Content-Description', "config file");
                 $this->response->setHeader('Content-Disposition', "attachment; filename=".basename($uri));
                 $this->response->setHeader('Content-type', "text/plain");
@@ -260,8 +185,7 @@ class GetController extends ModulesControllerBase
                 $this->logHttpRequest(200, [
                     'kind'   => 'per-mac',
                     'mac'    => $mac,
-                    'vendor' => $vendor !== null ? (string)$vendor : '',
-                    'model'  => $model ?? '',
+                    'vendor' => $vendor,
                     'bytes'  => strlen($config),
                 ]);
                 $this->terminateStreamedResponse();
@@ -510,38 +434,6 @@ class GetController extends ModulesControllerBase
         return '';
     }
 
-    /**
-     * Extracts the model name from ModuleAutoprovisionDevice.manufacturer_model.
-     *
-     * PnP populates the field as "Vendor / Model" (e.g. "Fanvil / X3SP V2") and
-     * some models contain spaces, so we can't just take the last whitespace token
-     * — that would shrink "X3SP V2" to "V2". When a "/" separator is present we
-     * take everything after it; otherwise we drop a leading vendor word that
-     * matches one of the known vendors and keep the rest. Returns null when the
-     * field is empty.
-     */
-    private function extractModel(string $manufacturerModel): ?string
-    {
-        $raw = trim($manufacturerModel);
-        if ($raw === '') {
-            return null;
-        }
-
-        $slash = strpos($raw, '/');
-        if ($slash !== false) {
-            $tail = trim(substr($raw, $slash + 1));
-            return $tail === '' ? null : $tail;
-        }
-
-        // No separator: strip a leading known-vendor token if present.
-        $parts = preg_split('/\s+/', $raw) ?: [];
-        if ($parts !== [] && in_array(strtolower($parts[0]), ['yealink', 'snom', 'fanvil', 'grandstream', 'htek'], true)) {
-            array_shift($parts);
-        }
-        $tail = implode(' ', $parts);
-        $tail = trim($tail);
-        return $tail === '' ? null : $tail;
-    }
 
     private function camelize(string $inputString): string
     {

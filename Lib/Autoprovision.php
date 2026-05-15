@@ -18,8 +18,11 @@ use MikoPBX\Core\System\Network;
 use MikoPBX\Core\System\Util;
 use MikoPBX\Core\System\SystemMessages;
 use Modules\ModuleAutoprovision\Lib\RestAPI\Firmware\Repository as FirmwareRepository;
+use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionUsers;
+use Modules\ModuleAutoprovision\Models\Templates;
+use Modules\ModuleAutoprovision\Models\TemplatesUsers;
 use Phalcon\Di\Injectable;
 
 class Autoprovision extends Injectable
@@ -121,6 +124,199 @@ class Autoprovision extends Injectable
         }
 
         return $confManager->generateConfig($req_data, $sipData);
+    }
+
+    /**
+     * Renders the per-MAC `TemplatesUsers`-bound config for `$mac` and returns
+     * the body as a string, or null when no template is mapped to the MAC.
+     *
+     * Shared by both the HTTP per-MAC endpoint (`GetController::getConfigStatic`)
+     * and the TFTP server (`WorkerTftpServer::resolveFile`) so the two channels
+     * produce byte-identical output for the same MAC. The legacy
+     * `generateConfigPhone()` multi-account flow remains the fallback when no
+     * mapping exists.
+     *
+     * Placeholder pipeline (order matters):
+     *   1. `{PBX_HOST}` / `{FIRMWARE_URL}` — generic, evaluated once.
+     *   2. `{SIP_NUM}` / `{SIP_USER_NAME}` / `{SIP_PASS}` — per-user, looked up
+     *      from `TemplatesUsers.userId` -> `Extensions` + `Sip`.
+     */
+    public static function renderTemplateConfig(string $mac, string $userAgent, ?string $vendorHint = null): ?string
+    {
+        $mac = strtolower(trim($mac));
+        if ($mac === '') {
+            return null;
+        }
+        $di = \Phalcon\Di\Di::getDefault();
+        if ($di === null) {
+            return null;
+        }
+        $manager = $di->get('modelsManager');
+
+        $parameters = [
+            'models'     => [
+                'TemplatesUsers' => TemplatesUsers::class,
+            ],
+            'conditions' => ':mac: LIKE TemplatesUsers.mac',
+            'bind'       => ['mac' => $mac],
+            'columns'    => [
+                'id'       => 'TemplatesUsers.id',
+                'template' => 'Templates.template',
+                'userId'   => 'TemplatesUsers.userId',
+            ],
+            'limit'      => 1,
+            'joins'      => [
+                'TemplatesUsers' => [
+                    0 => Templates::class,
+                    1 => 'Templates.id = TemplatesUsers.templateId',
+                    2 => 'Templates',
+                    3 => 'LEFT',
+                ],
+            ],
+        ];
+        $row = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
+        if (empty($row)) {
+            return null;
+        }
+        $template = (string)($row[0]['template'] ?? '');
+        if ($template === '') {
+            return null;
+        }
+
+        // Lookup SIP credentials for the bound user (matches the per-MAC branch in
+        // GetController::getConfigStatic).
+        $sipParameters = [
+            'models'     => [
+                'Extensions' => Extensions::class,
+            ],
+            'conditions' => ':userid: = Extensions.userid',
+            'bind'       => ['userid' => $row[0]['userId']],
+            'columns'    => [
+                '{SIP_USER_NAME}' => 'Extensions.callerid',
+                '{SIP_NUM}'       => 'Extensions.number',
+                '{SIP_PASS}'      => 'Sip.secret',
+            ],
+            'ORDER'      => 'mac DESC',
+            'limit'      => 1,
+            'joins'      => [
+                'Extensions' => [
+                    0 => Sip::class,
+                    1 => 'Extensions.number = Sip.extension',
+                    2 => 'Sip',
+                    3 => 'LEFT',
+                ],
+            ],
+        ];
+        $sipRow = $manager->createBuilder($sipParameters)->getQuery()->execute()->toArray();
+        $sipData = ['{SIP_NUM}' => '', '{SIP_USER_NAME}' => '', '{SIP_PASS}' => ''];
+        if (!empty($sipRow)) {
+            $sipData = $sipRow[0];
+        }
+
+        // Vendor/model lookup for {FIRMWARE_URL}. Resolution order:
+        //   1. User-Agent header (HTTP path — phones always include their vendor
+        //      string there).
+        //   2. Device record's manufacturer_model (populated by PnP discovery).
+        //   3. Caller-supplied $vendorHint (TFTP path: WorkerTftpServer infers it
+        //      from the filename prefix before PnP has recorded the device).
+        // Without (3), a TFTP request for a manually-mapped MAC whose device row
+        // has no manufacturer_model yet would yield vendor='' and {FIRMWARE_URL}=''
+        // even though the HTTP path could resolve it. That would re-introduce the
+        // HTTP/TFTP byte-identity drift this renderer exists to prevent.
+        $vendor = self::detectVendorFromUserAgent($userAgent);
+        $model  = null;
+        $device = ModuleAutoprovisionDevice::findFirst([
+            'mac = :mac:',
+            'bind' => ['mac' => $mac],
+        ]);
+        if ($device !== null && !empty($device->manufacturer_model)) {
+            $mm = (string)$device->manufacturer_model;
+            if ($vendor === '') {
+                $mmLower = strtolower($mm);
+                foreach (array_keys(FirmwareRepository::VENDOR_EXTENSIONS) as $candidate) {
+                    if (str_contains($mmLower, $candidate)) {
+                        $vendor = $candidate;
+                        break;
+                    }
+                }
+            }
+            $model = self::extractModel($mm);
+        }
+        if ($vendor === '' && $vendorHint !== null) {
+            $hint = strtolower(trim($vendorHint));
+            if ($hint !== '' && isset(FirmwareRepository::VENDOR_EXTENSIONS[$hint])) {
+                $vendor = $hint;
+            }
+        }
+
+        return self::applyGenericPlaceholders($template, $vendor, $model, $sipData);
+    }
+
+    /**
+     * Substitutes the generic ({PBX_HOST}, {FIRMWARE_URL}) and per-user ({SIP_*})
+     * placeholders into a template body. Generic pass runs first so a template
+     * authoring {FIRMWARE_URL} inside a {SIP_*} block still renders correctly.
+     *
+     * @param array<string,string> $sipReplacements
+     */
+    public static function applyGenericPlaceholders(
+        string $template,
+        string $vendor,
+        ?string $model,
+        array $sipReplacements = []
+    ): string {
+        $settings = ModuleAutoprovision::findFirst();
+        $generic  = [
+            '{FIRMWARE_URL}' => FirmwareRepository::resolveFirmwareUrl($vendor, $model),
+            '{PBX_HOST}'     => $settings !== null ? (string)($settings->pbx_host ?? '') : '',
+        ];
+        $rendered = strtr($template, $generic);
+        if (!empty($sipReplacements)) {
+            $rendered = str_replace(
+                array_keys($sipReplacements),
+                array_values($sipReplacements),
+                $rendered
+            );
+        }
+        return $rendered;
+    }
+
+    /**
+     * Best-effort vendor detection from the phone's User-Agent header.
+     */
+    public static function detectVendorFromUserAgent(string $userAgent): string
+    {
+        $ua = strtolower($userAgent);
+        foreach (['yealink', 'snom', 'fanvil', 'grandstream', 'htek'] as $vendor) {
+            if ($ua !== '' && str_contains($ua, $vendor)) {
+                return $vendor;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Extracts the model name from `ModuleAutoprovisionDevice.manufacturer_model`.
+     * Mirrors GetController::extractModel — kept here so the TFTP path doesn't
+     * have to depend on the HTTP controller.
+     */
+    public static function extractModel(string $manufacturerModel): ?string
+    {
+        $raw = trim($manufacturerModel);
+        if ($raw === '') {
+            return null;
+        }
+        $slash = strpos($raw, '/');
+        if ($slash !== false) {
+            $tail = trim(substr($raw, $slash + 1));
+            return $tail === '' ? null : $tail;
+        }
+        $parts = preg_split('/\s+/', $raw) ?: [];
+        if ($parts !== [] && in_array(strtolower($parts[0]), ['yealink', 'snom', 'fanvil', 'grandstream', 'htek'], true)) {
+            array_shift($parts);
+        }
+        $tail = trim(implode(' ', $parts));
+        return $tail === '' ? null : $tail;
     }
 
     /**

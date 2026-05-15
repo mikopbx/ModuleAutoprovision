@@ -126,6 +126,25 @@ class ReplaceAction
                 $res->messages['error'][] = "another firmware already uses '{$vendor}/{$newFilename}'";
                 return $res;
             }
+        } else {
+            // Same filename — overwriting in place would silently corrupt any
+            // other row that points at the same (vendor, filename) blob (its
+            // recorded sha256/size would no longer match the bytes on disk).
+            // Refuse and let the admin clean up the dup first.
+            $sharedRefs = ModuleAutoprovisionFirmware::count([
+                'vendor = :vendor: AND filename = :filename: AND id != :id:',
+                'bind' => ['vendor' => $vendor, 'filename' => $oldFilename, 'id' => $id],
+            ]);
+            if ((int)$sharedRefs > 0) {
+                $res->httpCode            = 409;
+                $res->messages['error'][] = sprintf(
+                    "cannot replace '%s/%s' in place — %d other firmware row(s) reference the same file; delete the duplicates or upload under a new filename",
+                    $vendor,
+                    $oldFilename,
+                    (int)$sharedRefs
+                );
+                return $res;
+            }
         }
 
         $lockHandle = @fopen(Repository::lockFile(), 'c');
@@ -169,9 +188,19 @@ class ReplaceAction
                 return $res;
             }
 
-            // If the rename pointed at a different filename, remove the old one.
+            // If the rename pointed at a different filename, remove the old one —
+            // but only when no other row still references the (vendor, oldFilename)
+            // blob. Otherwise the surviving rows' download URLs would 404 (the same
+            // shared-reference invariant the in-place branch guards above, just on
+            // the post-rename side).
             if ($newFilename !== $oldFilename && $oldPath !== $newPath && file_exists($oldPath)) {
-                @unlink($oldPath);
+                $sharedOldRefs = ModuleAutoprovisionFirmware::count([
+                    'vendor = :vendor: AND filename = :filename: AND id != :id:',
+                    'bind' => ['vendor' => $vendor, 'filename' => $oldFilename, 'id' => $id],
+                ]);
+                if ((int)$sharedOldRefs === 0) {
+                    @unlink($oldPath);
+                }
             }
 
             $row->filename    = $newFilename;

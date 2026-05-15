@@ -125,7 +125,14 @@ class WorkerTftpServer extends WorkerBase
         $this->firmwareBase = FirmwareRepository::baseDir();
 
         $this->client_queue = new BeanstalkClient();
-        $this->client_queue->subscribe('ping_' . self::class, [$this, 'pingCallBack']);
+        // Subscribe to the canonical ping tube WorkerBase::makePingTubeName builds —
+        // the previous literal `'ping_' . self::class` listened on a tube no one
+        // wrote to, so SafeScripts' pings expired in another tube and the
+        // supervisor restarted us every cycle.
+        $this->client_queue->subscribe(
+            $this->makePingTubeName(self::class),
+            [$this, 'pingCallBack']
+        );
 
         register_shutdown_function([$this, 'cleanupAllSessions']);
 
@@ -172,6 +179,20 @@ class WorkerTftpServer extends WorkerBase
             LOG_NOTICE
         );
 
+        // Suppress the benign "socket_select(): Unable to select [4]:
+        // Interrupted system call" warning that fires whenever SIGTERM/SIGUSR1
+        // interrupts our select. Without this, WorkerBase::shutdownHandler
+        // reads error_get_last() inside the exit(0) path and emits a noisy
+        // [SHUTDOWN-ERROR] line at LOG_ERR on every graceful restart. The
+        // handler returns false for non-EINTR warnings so they still surface
+        // through PHP's normal channel.
+        set_error_handler(static function (int $errno, string $errstr) {
+            if (str_contains($errstr, 'Interrupted system call')) {
+                return true;
+            }
+            return false;
+        }, E_WARNING);
+
         while (!$this->stopping) {
             $read   = [$this->mainSocket];
             foreach ($this->sessions as $s) {
@@ -182,8 +203,27 @@ class WorkerTftpServer extends WorkerBase
             $n = @socket_select($read, $write, $except, 0, self::SELECT_TIMEOUT_USEC);
 
             if ($n === false) {
-                // Interrupted by signal — loop back and re-check $this->stopping
-                // and let the signal handler set worker state.
+                $errNo = socket_last_error();
+                // SOCKET_EINTR (POSIX EINTR=4) is the normal-shutdown path: the
+                // graceful-restart SIGUSR1 handler trips this — log at DEBUG, do
+                // not raise LOG_ERR or we'd flood /var/log/messages on every
+                // worker restart cycle. Also clear PHP's last-error registry so
+                // WorkerBase::shutdownHandler() doesn't pick the suppressed
+                // socket_select warning back up and emit a SHUTDOWN-ERROR line.
+                if (defined('SOCKET_EINTR') && $errNo === SOCKET_EINTR) {
+                    socket_clear_error();
+                    error_clear_last();
+                } elseif ($errNo !== 0) {
+                    SystemMessages::sysLogMsg(
+                        self::LOG_TAG,
+                        'socket_select() failed: ' . socket_strerror($errNo)
+                            . ' (errno=' . $errNo . ')',
+                        LOG_ERR
+                    );
+                    socket_clear_error();
+                }
+                // Loop back so the $this->stopping check at the top of the loop
+                // can break us out cleanly when the supervisor asked for it.
                 $read = [];
             }
 
@@ -659,11 +699,33 @@ class WorkerTftpServer extends WorkerBase
             return null;
         }
 
-        // Vendor generators read several keys out of $req_data — most importantly
-        // `ip_srv` (the SIP/HTTP server host that ends up in `account.N.sip_server_host`)
-        // and `model` (used for handset count, logo mode, etc.). The HTTP route fills
-        // these from query string parameters; on the TFTP path we synthesise them from
-        // the device record and the module settings.
+        // Preferred path: render via the shared TemplatesUsers renderer so the
+        // TFTP and HTTP channels emit byte-identical configs for a MAC bound to
+        // a template. The legacy multi-account `generateConfigPhone()` flow only
+        // runs when no template mapping exists for the MAC.
+        //
+        // Pass the filename-inferred vendor as the hint: phones don't send a
+        // User-Agent over TFTP, and a freshly-mapped MAC may not have a
+        // manufacturer_model recorded yet (PnP populates that asynchronously).
+        // Without the hint, {FIRMWARE_URL} would resolve to '' on the TFTP side
+        // while the HTTP side resolves it from the UA — breaking the byte-identity
+        // guarantee for the very case the shared renderer was introduced to fix.
+        $rendered = Autoprovision::renderTemplateConfig($mac, '', $vendor);
+        if ($rendered !== null) {
+            $tmp = $this->writeRenderedToTempFile($rendered, $mac);
+            if ($tmp === null) {
+                return null;
+            }
+            return ['path' => $tmp, 'tempfile' => true, 'size' => strlen($rendered)];
+        }
+        $autoprov = new Autoprovision();
+
+        // Fallback: vendor generators read several keys out of $req_data — most
+        // importantly `ip_srv` (the SIP server host that ends up in
+        // `account.N.sip_server_host`) and `model` (used for handset count,
+        // logo mode, etc.). The HTTP route fills these from query string
+        // parameters; on the TFTP path we synthesise them from the device
+        // record and the module settings.
         $settings = ModuleAutoprovision::findFirst();
         $ipSrv    = $settings !== null ? (string)($settings->pbx_host ?? '') : '';
         $model    = '';
@@ -678,7 +740,6 @@ class WorkerTftpServer extends WorkerBase
             }
         }
 
-        $autoprov = new Autoprovision();
         $cfgPath  = $autoprov->generateConfigPhone([
             'mac'    => $mac,
             'vendor' => $vendor,
@@ -690,6 +751,31 @@ class WorkerTftpServer extends WorkerBase
         }
         $size = (int)@filesize($cfgPath);
         return ['path' => $cfgPath, 'tempfile' => true, 'size' => $size];
+    }
+
+    /**
+     * Persists a rendered TemplatesUsers config into a tempfile so the TFTP
+     * session loop can stream it block-by-block via fopen()/fread() and unlink
+     * it on session close. Mirrors the tempfile contract used by
+     * Autoprovision::generateConfigPhone().
+     */
+    private function writeRenderedToTempFile(string $rendered, string $mac): ?string
+    {
+        $dir = sys_get_temp_dir() ?: '/tmp';
+        $tmp = @tempnam($dir, 'autoprovtftp-' . $mac . '-');
+        if ($tmp === false) {
+            SystemMessages::sysLogMsg(
+                self::LOG_TAG,
+                "failed to create temp file for rendered config mac={$mac}",
+                LOG_ERR
+            );
+            return null;
+        }
+        if (@file_put_contents($tmp, $rendered) === false) {
+            @unlink($tmp);
+            return null;
+        }
+        return $tmp;
     }
 
     private function searchAllVendorDirs(string $file): ?array

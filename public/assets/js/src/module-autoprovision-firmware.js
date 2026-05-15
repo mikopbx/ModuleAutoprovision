@@ -115,34 +115,40 @@ const moduleAutoprovisionFirmware = {
 				.append($('<td>').text(`${sizeMb} MB`))
 				.append($('<td>').attr('title', item.sha256 || '').text(sha))
 				.append(
-					$('<td class="right aligned">')
+					$('<td class="right aligned collapsing">')
 						.append(
-							$('<a class="ui mini blue button firmware-download">')
-								.attr('href', item.url || '#')
-								.attr('target', '_blank')
-								.attr('title', 'Download')
-								.html('<i class="download icon"></i>'),
-						)
-						.append(
-							$('<a class="ui mini teal button firmware-edit">')
-								.attr('href', '#')
-								.attr('data-firmware-id', item.id)
-								.attr('title', 'Edit metadata')
-								.html('<i class="edit icon"></i>'),
-						)
-						.append(
-							$('<a class="ui mini olive button firmware-replace">')
-								.attr('href', '#')
-								.attr('data-firmware-id', item.id)
-								.attr('title', 'Replace file')
-								.html('<i class="sync icon"></i>'),
-						)
-						.append(
-							$('<a class="ui mini red button firmware-delete">')
-								.attr('href', '#')
-								.attr('data-firmware-id', item.id)
-								.attr('title', 'Delete')
-								.html('<i class="trash icon"></i>'),
+							// Semantic UI "buttons" group renders the actions as a single
+							// connected, monochrome bar — keeps the row visually tidy and
+							// avoids the rainbow of per-action colours we had before.
+							// Download stays an <a> so middle-click / "open in new tab"
+							// still works; the rest are <button> because they trigger
+							// JS-driven flows (modal, file picker, confirm).
+							$('<div class="ui small basic icon buttons">')
+								.append(
+									$('<a class="ui button firmware-download">')
+										.attr('href', item.url || '#')
+										.attr('target', '_blank')
+										.attr('title', 'Download')
+										.html('<i class="download icon"></i>'),
+								)
+								.append(
+									$('<button class="ui button firmware-edit" type="button">')
+										.attr('data-firmware-id', item.id)
+										.attr('title', 'Edit metadata')
+										.html('<i class="edit icon"></i>'),
+								)
+								.append(
+									$('<button class="ui button firmware-replace" type="button">')
+										.attr('data-firmware-id', item.id)
+										.attr('title', 'Replace file')
+										.html('<i class="sync icon"></i>'),
+								)
+								.append(
+									$('<button class="ui button firmware-delete" type="button">')
+										.attr('data-firmware-id', item.id)
+										.attr('title', 'Delete')
+										.html('<i class="trash icon"></i>'),
+								),
 						),
 				);
 			$tbody.append($row);
@@ -411,15 +417,22 @@ const moduleAutoprovisionFirmware = {
 			}
 			const fileId = response?.data?.upload_id || '';
 			const status = response?.data?.d_status || '';
+			// Capture the browser-supplied filename before Core's merge step
+			// drops dots from the canonical name on disk. This is what we send
+			// to /firmware:upload as `original_filename` so the registered row
+			// keeps "T48S-66.86.0.11.rom" instead of "T48S-668601".
+			const originalName = (data?.file?.fileName)
+				|| (data?.file?.file?.name)
+				|| '';
 			if (status === 'MERGING') {
 				moduleAutoprovisionFirmware.setProgress(95, 'Merging chunks…');
 				moduleAutoprovisionFirmware.waitForMerge(
 					fileId,
-					() => moduleAutoprovisionFirmware.registerFirmware(fileId),
+					() => moduleAutoprovisionFirmware.registerFirmware(fileId, originalName),
 				);
 			} else {
 				moduleAutoprovisionFirmware.setProgress(100, 'Registering…');
-				moduleAutoprovisionFirmware.registerFirmware(fileId);
+				moduleAutoprovisionFirmware.registerFirmware(fileId, originalName);
 			}
 			break;
 		}
@@ -473,7 +486,7 @@ const moduleAutoprovisionFirmware = {
 		});
 	},
 
-	registerFirmware(fileId) {
+	registerFirmware(fileId, originalName = '') {
 		if (!fileId) {
 			moduleAutoprovisionFirmware.setProgress(0, 'Missing file_id from Core upload');
 			return;
@@ -485,6 +498,12 @@ const moduleAutoprovisionFirmware = {
 			version: moduleAutoprovisionFirmware.$version.val() || '',
 			notes: moduleAutoprovisionFirmware.$notes.val() || '',
 		};
+		// Forward the browser-supplied filename so Core's dot-stripping merge
+		// can't lose the firmware extension or version string. UploadAction
+		// falls back to the merged basename when this is absent.
+		if (originalName) {
+			payload.original_filename = originalName;
+		}
 		$.api({
 			url: `${moduleAutoprovisionFirmware.basePath}:upload`,
 			method: 'POST',

@@ -12,5 +12,8 @@
         <P36>{SIP_NUM}</P36>
         <P34>{SIP_PASS}</P34>
         <P1359>0</P1359>
+        <!-- Uncomment after uploading firmware in the Firmware tab.
+             P192 = Firmware Server Path (URL phones poll for upgrades).
+             <P192>{FIRMWARE_URL}</P192> -->
     </config>
 </gs_provision>
