@@ -2,7 +2,7 @@
   "name": "mikopbx/moduleautoprovision",
   "description": "ModuleAutoprovision",
   "require": {
-    "php": "^8.3"
+    "php": "^8.4"
   },
   "autoload": {
     "psr-4": {
@@ -55,7 +55,7 @@
   "config": {
     "sort-packages": true,
     "platform": {
-      "php": "8.3"
+      "php": "8.4"
     }
   }
 }
