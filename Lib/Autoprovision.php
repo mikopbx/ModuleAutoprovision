@@ -285,11 +285,17 @@ class Autoprovision extends Injectable
      * round-trip succeeds and the decoded payload contains an INI section marker — otherwise
      * arbitrary base64-shaped strings would be silently rewritten.
      *
-     * @param string $manualAttributes Either raw INI text or its base64-encoded form.
+     * @param string|null $manualAttributes Either raw INI text or its base64-encoded
+     *                                       form. The Phalcon model returns NULL for
+     *                                       unpopulated additional_params columns, so
+     *                                       we accept null and treat it as "no overrides".
      * @return array<string, string> Map of section name to raw section body.
      */
-    public static function parseIniSettings(string $manualAttributes): array
+    public static function parseIniSettings(?string $manualAttributes): array
     {
+        if ($manualAttributes === null || $manualAttributes === '') {
+            return [];
+        }
         $decoded = base64_decode($manualAttributes, true);
         if ($decoded !== false && base64_encode($decoded) === $manualAttributes && str_contains($decoded, '[')) {
             $manualAttributes = $decoded;

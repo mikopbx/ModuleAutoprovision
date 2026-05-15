@@ -71,15 +71,37 @@ class AutoprovisionConf extends ConfigClass
 
     /**
      * Returns module workers to start it at WorkerSafeScript
+     *
+     * The TFTP worker is registered only when the admin has switched it on —
+     * keeping it out of the supervisor list when disabled prevents the binary
+     * from binding UDP/69 (it's privileged on most distros) and avoids the
+     * per-cycle re-check WorkerSafeScripts does on every entry.
      */
     public function getModuleWorkers(): array
     {
-        return [
+        $workers = [
             [
                 'type'   => WorkerSafeScriptsCore::CHECK_BY_BEANSTALK,
                 'worker' => WorkerProvisioningServerPnP::class,
             ],
         ];
+        if (self::isTftpEnabled()) {
+            $workers[] = [
+                'type'   => WorkerSafeScriptsCore::CHECK_BY_BEANSTALK,
+                'worker' => WorkerTftpServer::class,
+            ];
+        }
+        return $workers;
+    }
+
+    /**
+     * True when the admin toggled the pure-PHP TFTP provisioning channel on.
+     * Persisted as a string flag in m_ModuleAutoprovision.tftp_enabled.
+     */
+    public static function isTftpEnabled(): bool
+    {
+        $settings = ModuleAutoprovision::findFirst();
+        return $settings !== null && ((string)$settings->tftp_enabled) === '1';
     }
 
     /**
@@ -125,6 +147,15 @@ class AutoprovisionConf extends ConfigClass
         PBX::sipReload();
         WorkerModelsEvents::invokeAction(ReloadNginxAction::class);
         WorkerModelsEvents::invokeAction(ReloadFirewallAction::class);
+        // Stop the TFTP worker if the admin just turned the feature off; the
+        // supervisor will respawn it on the next tick if isTftpEnabled() flips
+        // back on. Without this, the listener would stay bound to UDP/69 until
+        // the next module enable cycle.
+        if (!self::isTftpEnabled()) {
+            Processes::processWorker('', '', WorkerTftpServer::class, 'stop');
+        } else {
+            System::invokeActions(['cron' => 0]);
+        }
 
         $res          = new PBXApiResult();
         $res->success = true;
@@ -342,6 +373,10 @@ class AutoprovisionConf extends ConfigClass
     {
         PBX::dialplanReload();
         PBX::sipReload();
+        // System::invokeActions(['cron'=>0]) re-runs the supervisor which picks
+        // up every entry returned by getModuleWorkers() — including the TFTP
+        // worker when the admin has flipped the toggle on — so we don't need
+        // to spawn it explicitly here.
         System::invokeActions(['cron' => 0]);
         $workerPath = Util::getFilePathByClassName(WorkerProvisioningServerPnP::class);
         $phpPath    = Util::which('php');
@@ -370,26 +405,34 @@ class AutoprovisionConf extends ConfigClass
         // directly. Explicit `last` flag re-runs location matching after the
         // rewrite, landing on the `= /pbxcore/index.php` internal location.
         //
+        // NginxConf::buildServerBlock() embeds this content via preg_replace,
+        // whose replacement argument interprets `$N` as backreferences. Without
+        // the leading backslash, `$1` would be consumed and the rewrite would
+        // produce `_url=/` — every PnP fetch landing on a 404. The `\\\$1`
+        // heredoc sequence yields the literal `\$1` in $content, which the
+        // preg_replace pass then emits as `$1` in the final nginx config.
+        //
         // The /firmware/ alias serves phone firmware blobs straight from disk;
         // proxying them through PHP would OOM the worker on a 40 MB Yealink T5x
         // .rom file. Read-only by design — uploads go through the v3 REST path.
         $content = <<<NGINX
     location ^~ {$baseUri}/ {
-        rewrite ^/pbxcore/(.*)\$ /pbxcore/index.php?_url=/\$1 last;
+        rewrite ^/pbxcore/(.*)\$ /pbxcore/index.php?_url=/\\\$1 last;
     }
 
     location ~ ^/pbxcore/api/autoprovision/(getcfg|getimg)\$ {
-        rewrite ^/pbxcore/(.*)\$ /pbxcore/index.php?_url=/\$1 last;
+        rewrite ^/pbxcore/(.*)\$ /pbxcore/index.php?_url=/\\\$1 last;
     }
 
     location ^~ /firmware/ {
         alias {$firmwareDir}/;
         autoindex off;
         add_header Cache-Control "public, max-age=3600";
-        # Log every phone fetch through the OS syslog under the autoprovision-firmware
-        # tag — the file is served by nginx without touching PHP, so PHP-side
-        # Util::sysLogMsg() can't see these requests. Requires nginx ≥ 1.7.1.
-        access_log syslog:server=unix:/dev/log,tag=autoprovision-firmware combined;
+        # Log every phone fetch through the OS syslog under the autoprovision_firmware
+        # tag. nginx forbids "-" in syslog tag names (only [A-Za-z0-9_]) — using
+        # the dashed variant prevents the server-block from loading, so the
+        # provisioning port silently fails to bind on boot.
+        access_log syslog:server=unix:/dev/log,tag=autoprovision_firmware combined;
         limit_except GET HEAD { deny all; }
     }
 
@@ -420,16 +463,26 @@ NGINX;
     public function getDefaultFirewallRules(): array
     {
         $port = (string)self::getHttpPort();
+        $rules = [
+            [
+                'portfrom' => $port,
+                'portto'   => $port,
+                'protocol' => 'tcp',
+                'name'     => 'AutoprovisionHttpPort',
+            ],
+        ];
+        // TFTP rides UDP/69 (RFC 1350). The firewall row is always seeded so
+        // toggling the feature on later doesn't require a re-install; the
+        // worker is what actually opens the listener.
+        $rules[] = [
+            'portfrom' => '69',
+            'portto'   => '69',
+            'protocol' => 'udp',
+            'name'     => 'AutoprovisionTftpPort',
+        ];
         return [
             'ModuleAutoprovision' => [
-                'rules' => [
-                    [
-                        'portfrom' => $port,
-                        'portto'   => $port,
-                        'protocol' => 'tcp',
-                        'name'     => 'AutoprovisionHttpPort',
-                    ],
-                ],
+                'rules'     => $rules,
                 'action'    => 'allow',
                 'shortName' => 'Autoprovision',
             ],

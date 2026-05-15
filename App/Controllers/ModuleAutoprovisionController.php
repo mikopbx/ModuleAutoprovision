@@ -14,7 +14,9 @@ use MikoPBX\AdminCabinet\Controllers\BaseController;
 use MikoPBX\AdminCabinet\Providers\AssetProvider;
 use MikoPBX\Common\Models\Extensions;
 use MikoPBX\Modules\PbxExtensionUtils;
+use Phalcon\Tag;
 use Modules\ModuleAutoprovision\App\Forms\ModuleAutoprovisionForm;
+use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
 use Modules\ModuleAutoprovision\Lib\TemplateSeeder;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\OtherPBX;
@@ -125,7 +127,36 @@ class ModuleAutoprovisionController extends BaseController
                 $record->extension = (string)$data['extension'];
                 continue;
             }
-            $record->{$column} = array_key_exists($column, $data) ? $data[$column] : '';
+            if ($column === 'http_port') {
+                // Clamp to the unprivileged range. Without this guard a typo
+                // like "80" would persist into the DB even though
+                // AutoprovisionConf::getHttpPort() validates on read — the
+                // saved-but-rejected value silently reverts to the default
+                // and confuses operators tracking down why the firewall row
+                // does not match the form they just submitted.
+                $raw = $data['http_port'] ?? '';
+                $clean = filter_var((string)$raw, FILTER_VALIDATE_INT, [
+                    'options' => ['min_range' => 1024, 'max_range' => 65535],
+                ]);
+                $record->http_port = $clean === false
+                    ? (string)AutoprovisionConf::DEFAULT_HTTP_PORT
+                    : (string)$clean;
+                continue;
+            }
+            if ($column === 'tftp_enabled') {
+                // HTML checkboxes only POST when ticked. An absent key means
+                // "off"; any other value normalises to '1'.
+                $record->tftp_enabled = empty($data['tftp_enabled']) ? '0' : '1';
+                continue;
+            }
+            if (!array_key_exists($column, $data)) {
+                // Field absent from this POST — preserve whatever was already
+                // stored. Overwriting with '' wiped previously-saved values
+                // when the form was submitted from a tab that didn't render
+                // the input (typical for pbx_host, which lives on the PnP tab).
+                continue;
+            }
+            $record->{$column} = $data[$column];
         }
 
         if ($record->save() === false) {
@@ -175,6 +206,14 @@ class ModuleAutoprovisionController extends BaseController
      */
     public function loadExampleTemplatesAction(): void
     {
+        // BaseController::initialize() builds the page title from
+        // "Breadcrumb{$controllerName}{$actionName}" for any non-canonical action,
+        // which for this endpoint becomes the un-translated key
+        // `BreadcrumbModuleAutoprovisionload-example-templates`. Re-use the index
+        // breadcrumb so AJAX clients that surface the title (or curl debug runs)
+        // see the same label as the parent page.
+        Tag::setTitle('MikoPBX|' . $this->translation->_('BreadcrumbModuleAutoprovision'));
+
         if (!$this->request->isPost()) {
             $this->view->success = false;
             $this->view->message = $this->translation->_('mod_Autoprovision_load_examples_post_only');

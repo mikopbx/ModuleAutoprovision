@@ -78,6 +78,15 @@ class ModuleAutoprovision extends ModulesModelsBase
     public $http_port;
 
     /**
+     * Enables the pure-PHP TFTP server (UDP/69) for phones / firmware that
+     * prefer DHCP option 66 over multicast PnP. Stored as a Phalcon-style
+     * boolean column ('0'/'1' string) to match the rest of this model.
+     *
+     * @Column(type="string", nullable=true)
+     */
+    public $tftp_enabled;
+
+    /**
      * Returns dynamic relations between module models and common models
      * MikoPBX check it in ModelsBase after every call to keep data consistent
      *

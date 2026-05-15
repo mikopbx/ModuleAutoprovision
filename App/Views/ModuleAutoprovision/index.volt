@@ -81,6 +81,14 @@
           <label>{{ t._('mod_Autoprovision_additional_params') }}</label>
           {{ form.render('additional_params') }}
         </div>
+
+        <div class="eight wide field">
+            <div class="ui toggle checkbox">
+                {{ form.render('tftp_enabled') }}
+                <label>{{ t._('mod_Autoprovision_tftp_enabled') }}</label>
+            </div>
+            <div class="ui small note">{{ t._('mod_Autoprovision_tftp_enabled_hint') }}</div>
+        </div>
     </div>
     <div class="ui bottom attached tab segment" data-tab="general-settings">
         <div class="ui message"> {{ t._('mod_Autoprovision_templates_uri_header') }}</div>

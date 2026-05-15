@@ -135,7 +135,31 @@ class PbxExtensionSetup extends PbxExtensionSetupBase
         Processes::mwExec('chmod +x ' . escapeshellarg($this->moduleDir . '/agi-bin') . '/*');
         parent::installFiles();
         $this->ensureFirmwareDir();
+        $this->fixModuleDbOwnership();
         return true;
+    }
+
+    /**
+     * Hand the module's SQLite DB tree (and the parent db/ dir) to the www user.
+     *
+     * Without this, the "Load example templates" button (and any other DB write
+     * triggered from PHP-FPM) lands on a read-only file because Phalcon creates
+     * the .db file under the root-owned db/ dir with root-as-owner the first time
+     * installDB() runs. The chown is best-effort — failures are logged and
+     * non-fatal because some platforms (Docker bind-mounts, NFS) don't honour
+     * chown anyway and would still work if the file was already writable.
+     */
+    private function fixModuleDbOwnership(): void
+    {
+        $dbDir = $this->moduleDir . '/db';
+        if (!is_dir($dbDir)) {
+            return;
+        }
+        // Match the rest of the MikoPBX file tree: www:www, 0660 for files,
+        // 0770 for the dir so PHP can also create the WAL/SHM sidecar files.
+        Processes::mwExec('chown -R www:www ' . escapeshellarg($dbDir));
+        Processes::mwExec('chmod 0770 ' . escapeshellarg($dbDir));
+        Processes::mwExec('find ' . escapeshellarg($dbDir) . ' -type f -exec chmod 0660 {} +');
     }
 
     /**

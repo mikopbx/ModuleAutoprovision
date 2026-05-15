@@ -14,6 +14,8 @@ return [
     'repModuleAutoprovision' => 'Autoprovision module - %represent%',
     'fw_moduleautoprovisionDescription' => 'Autoprovision - phone configuration delivery over HTTP',
     'fw_moduleautoprovisionDescriptionHint' => 'Dedicated TCP port served by ModuleAutoprovision over plain HTTP (no HTTPS redirect).<br>IP phones fetch their config files from this port during provisioning.<br>Open access only for the local network the phones live on.',
+    'fw_AutoprovisionTftpPortDescription' => 'Autoprovision - TFTP server (UDP/69)',
+    'fw_AutoprovisionTftpPortDescriptionHint' => 'UDP/69 served by the in-module pure-PHP TFTP server.<br>Used by phones / firmware that prefer DHCP option 66 (TFTP) over multicast PnP — Snom historically, some Fanvil firmwares, and routed networks where multicast does not cross the L3 boundary.<br><b>Plain-text protocol:</b> open only on the LAN segment that the phones live on.',
     'mo_ModuleAutoprovision' => 'The autoprovision module',
     'BreadcrumbModuleAutoprovision' => 'The autoprovision module',
     'SubHeaderModuleAutoprovision' => 'Bulk ip-phones setup',
@@ -24,6 +26,8 @@ return [
     'mod_Autoprovision_mac_black' => 'Black MAC address list',
     'mod_Autoprovision_mac_white' => 'White MAC address list',
     'mod_Autoprovision_additional_params' => 'Additional settings',
+    'mod_Autoprovision_tftp_enabled' => 'Enable TFTP provisioning (UDP/69)',
+    'mod_Autoprovision_tftp_enabled_hint' => 'Starts a pure-PHP TFTP server on UDP/69 that delivers the same per-MAC vendor config as the HTTP channel, plus any firmware blob from the Firmware tab.<br>Useful when multicast PnP is blocked (most office WiFi, routed networks) or when a phone prefers DHCP option 66 over multicast (Snom, some Fanvil firmwares).<br>No extra binaries — runs inside the module worker. <b>Plain-text protocol</b>: only enable on a trusted LAN. The firewall rule for UDP/69 is opened automatically.',
     'mod_Autoprovision_header' => 'If the module is enabled, the SIP account "<b>apv-miko-pbx</b>" becomes available on the PBX.
 <br>To automatically configure your phone, you need to reset it to factory settings.
 <br>If the phone connects to the PBX for the first time, it will be registered to the "<b>apv-miko-pbx</b>" account.

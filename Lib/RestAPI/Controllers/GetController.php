@@ -19,6 +19,7 @@ use MikoPBX\PBXCoreREST\Controllers\Modules\ModulesControllerBase;
 use MikoPBX\Common\Library\Text;
 use Modules\ModuleAutoprovision\Lib\RestAPI\Firmware\Repository as FirmwareRepository;
 use Modules\ModuleAutoprovision\Lib\Transliterate;
+use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 use Modules\ModuleAutoprovision\Models\OtherPBX;
 use Modules\ModuleAutoprovision\Models\Templates;
@@ -54,12 +55,16 @@ class GetController extends ModulesControllerBase
             $this->echoPhoneBookYealink($uri);
             $this->response->sendRaw();
             Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url'].', code: 200');
-            return;
+            // exit() short-circuits the Micro afterExecuteRoute / ResponseMiddleware chain.
+            // Without it, the custom Response::send() wraps the streamed body with a
+            // trailing {"meta":{"timestamp":..,"hash":..}} envelope, which corrupts the
+            // XML / config payload the phone is downloading.
+            $this->terminateStreamedResponse();
         }elseif ($uri === '/grandstream'){
             $this->echoPhoneBookGrandStream($uri);
             $this->response->sendRaw();
             Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url'].', code: 200');
-            return;
+            $this->terminateStreamedResponse();
         }
         $manager = $this->di->get('modelsManager');
         $parameters = [
@@ -88,15 +93,43 @@ class GetController extends ModulesControllerBase
         ];
         $result = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
         if(!empty($result)){
+            // Substitute the vendor-agnostic placeholders before streaming the
+            // template. The original code echoed the raw template body, which left
+            // any `{FIRMWARE_URL}` / `{PBX_HOST}` token visible to the phone as a
+            // literal string and broke firmware-URL emission for URIs that lived
+            // outside the per-MAC branch below. Per-user placeholders ({SIP_*}) are
+            // not in scope here — URI templates are shared across phones and we
+            // intentionally leave them literal so the operator notices when a
+            // sip-bearing template is wired to a URI route by mistake. We also log
+            // a warning when those tokens slip through so the situation is visible
+            // without staring at packet captures.
+            $template = (string)$result[0]['template'];
+
+            $vendor   = $this->detectVendorFromUserAgent((string)$userAgent);
+            $settings = ModuleAutoprovision::findFirst();
+            $genericReplacements = [
+                '{FIRMWARE_URL}' => FirmwareRepository::resolveFirmwareUrl($vendor, null),
+                '{PBX_HOST}'     => $settings !== null ? (string)($settings->pbx_host ?? '') : '',
+            ];
+            $rendered = strtr($template, $genericReplacements);
+            if (preg_match('/\{SIP_(USER_NAME|NUM|PASS)\}/', $rendered) === 1) {
+                Util::sysLogMsg(
+                    'autoprovision-http',
+                    'URI template ' . $_REQUEST['_url'] . ' still contains {SIP_*} placeholders'
+                        . ' — these are only resolvable on the per-MAC route, not the URI route.',
+                    LOG_WARNING
+                );
+            }
+
             $this->response->setHeader('Content-Description', "config file");
             $this->response->setHeader('Content-Disposition', "attachment; filename=".basename($uri));
             $this->response->setHeader('Content-type', "text/plain");
             $this->response->setHeader('Content-Transfer-Encoding', "binary");
             $this->response->sendHeaders();
-            echo $result[0]['template'];
+            echo $rendered;
             $this->response->sendRaw();
             Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url']. ', code: 200');
-            return;
+            $this->terminateStreamedResponse();
         }
         $pattern = '/([0-9A-Fa-f]{2}[:-]?){5}([0-9A-Fa-f]{2})/i';
         if (preg_match_all($pattern, $_REQUEST['_url'], $matches)) {
@@ -105,7 +138,7 @@ class GetController extends ModulesControllerBase
                 Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url']. ', code: 404');
                 $this->response->setStatusCode(404, 'Ignore boot config yealink');
                 $this->response->sendRaw();
-                return;
+                $this->terminateStreamedResponse();
             }
 
             $parameters = [
@@ -189,13 +222,32 @@ class GetController extends ModulesControllerBase
                 $this->response->sendHeaders();
                 echo $config;
                 Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url'].', code: 200');
-                return;
+                $this->terminateStreamedResponse();
             }
         }
 
         Util::sysLogMsg('autoprovision-http', 'User-Agent: '.$userAgent. ", URI: ". $_REQUEST['_url']. ', code: 404');
         $this->response->setStatusCode(404, 'Not found');
         $this->response->sendRaw();
+        $this->terminateStreamedResponse();
+    }
+
+    /**
+     * Stops further response processing after a streaming endpoint has written its
+     * body. Without this, the Micro afterExecuteRoute → ResponseMiddleware chain
+     * still calls our custom Response::send(), which json_encodes the (empty)
+     * content buffer and appends a `{"meta":{"timestamp":..,"hash":..}}` footer.
+     * That footer corrupts the strict-format payload a phone is parsing.
+     */
+    private function terminateStreamedResponse(): void
+    {
+        // Flush PHP's output buffers so anything still queued lands on the wire
+        // before we tear down. FPM cleans up the worker normally after exit.
+        while (ob_get_level() > 0 && @ob_end_flush()) {
+            // noop — drain until empty or ob_end_flush refuses.
+        }
+        flush();
+        exit;
     }
 
     private function echoPhoneBookGrandStream($uri):void
@@ -291,7 +343,12 @@ class GetController extends ModulesControllerBase
         $nameBook = $_REQUEST['name']??'';
         if(empty($nameBook)){
             $phoneBook.= "<?xml version='1.0' encoding='UTF-8'?>".PHP_EOL;
-            ['hostname' => $nameBook] = Network::getHostName();
+            // The original code substituted the container/host hostname directly
+            // into the XML root tag — producing nonsense like
+            // <a4706e46d81dIPPhoneDirectory> on a Docker host. Yealink's spec only
+            // recognises the literal "YealinkIPPhoneDirectory" envelope, so we
+            // hardcode "Yealink" here for the default-namespace branch.
+            $nameBook = 'Yealink';
             $otherPbx = OtherPBX::find()->toArray();
             $client = new Client();
             foreach ($otherPbx as $pbx){
