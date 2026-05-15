@@ -15,6 +15,7 @@ use MikoPBX\AdminCabinet\Providers\AssetProvider;
 use MikoPBX\Common\Models\Extensions;
 use MikoPBX\Modules\PbxExtensionUtils;
 use Modules\ModuleAutoprovision\App\Forms\ModuleAutoprovisionForm;
+use Modules\ModuleAutoprovision\Lib\TemplateSeeder;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\OtherPBX;
 use Modules\ModuleAutoprovision\Models\Templates;
@@ -152,6 +153,34 @@ class ModuleAutoprovisionController extends BaseController
         $this->view->resultSaveTables = $resultSaveTables;
 
         $this->db->commit();
+    }
+
+    /**
+     * Installs the bundled vendor example templates on demand.
+     *
+     * Idempotent: TemplateSeeder skips any seed whose `name` already exists in
+     * m_Templates, so clicking the button twice never produces duplicates. The
+     * JS handler reloads the page on success so the new rows appear in the table.
+     *
+     * Returns JSON (the BaseController serializes view params for AJAX) with
+     * per-category name lists; flash isn't used because BaseController consumes
+     * the flash queue while building the AJAX response, and a queued message
+     * would not survive the page reload that follows.
+     */
+    public function loadExampleTemplatesAction(): void
+    {
+        if (!$this->request->isPost()) {
+            $this->view->success = false;
+            $this->view->message = $this->translation->_('mod_Autoprovision_load_examples_post_only');
+            return;
+        }
+
+        $report = TemplateSeeder::seed();
+
+        $this->view->success   = $report['failed'] === [];
+        $this->view->installed = $report['installed'];
+        $this->view->skipped   = $report['skipped'];
+        $this->view->failed    = $report['failed'];
     }
 
     /**

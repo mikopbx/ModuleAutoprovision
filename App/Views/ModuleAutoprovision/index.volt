@@ -204,6 +204,14 @@
       <div class="ui message"> {{ t._('mod_Autoprovision_templates_header') }}</div>
 
       <a id="add-new-template-button" class="ui blue button"><i class="add circle icon"></i>{{ t._('mod_Autoprovision_addNew') }}</a>
+      <a id="load-example-templates-button" class="ui basic button"
+         data-tooltip="{{ t._('mod_Autoprovision_load_examples_hint') }}"
+         data-already-msg="{{ t._('mod_Autoprovision_load_examples_already_present') }}"
+         data-failed-msg="{{ t._('mod_Autoprovision_load_examples_failed') }}"
+         data-partial-msg="{{ t._('mod_Autoprovision_load_examples_partial') }}"
+         data-unsaved-msg="{{ t._('mod_Autoprovision_load_examples_unsaved_warning') }}">
+        <i class="cloud download icon"></i>{{ t._('mod_Autoprovision_load_examples') }}
+      </a>
       <table id="templates" class="ui celled table" data-table-key="templates" data-model="Templates">
         <thead><tr>
           <th>{{ t._('mod_Autoprovision_template_name') }}</th>

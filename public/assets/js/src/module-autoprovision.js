@@ -4,10 +4,11 @@
  * Proprietary and confidential
  */
 
-/* global globalRootUrl, Config, Form */
+/* global globalRootUrl, Config, Form, UserMessage */
 
 const moduleAutoprovision = {
 	saveUrl: 'module-autoprovision/module-autoprovision/save',
+	loadExamplesUrl: 'module-autoprovision/module-autoprovision/load-example-templates',
 	$formObj: $('#module-autoprovision-form'),
 
 	initialize() {
@@ -15,6 +16,7 @@ const moduleAutoprovision = {
 		moduleAutoprovision.initInputElements();
 		moduleAutoprovision.bindAddRowButtons();
 		moduleAutoprovision.bindRowActions();
+		moduleAutoprovision.bindLoadExamplesButton();
 	},
 
 	/**
@@ -93,6 +95,66 @@ const moduleAutoprovision = {
 			e.preventDefault();
 			const id = $(this).closest('tr').attr('id');
 			moduleAutoprovision.showTemplateOptions(id);
+		});
+	},
+
+	/**
+	 * One-shot bootstrap of the bundled vendor example templates.
+	 *
+	 * TemplateSeeder is idempotent (skips by name) and atomic per seed (rolls back
+	 * the template row when its URI insert fails). The handler:
+	 *   - confirms a discard if the surrounding form is dirty, since a successful
+	 *     install reloads the page and would otherwise drop unsaved admin edits;
+	 *   - reloads only when nothing failed, so partial failures stay on screen
+	 *     instead of being hidden by the reload.
+	 */
+	bindLoadExamplesButton() {
+		$('body').on('click', '#load-example-templates-button', function handleLoadExamples(e) {
+			e.preventDefault();
+			const $button = $(this);
+			if ($button.hasClass('loading') || $button.hasClass('disabled')) {
+				return;
+			}
+
+			// Form.$submitButton has class `disabled` while the form matches its initial
+			// values; once any field changes, checkValues() removes it. Treat that as
+			// dirty and warn before the post-install reload throws those edits away.
+			const formIsDirty = Form.$submitButton && !Form.$submitButton.hasClass('disabled');
+			// eslint-disable-next-line no-alert
+			if (formIsDirty && !window.confirm($button.data('unsaved-msg'))) {
+				return;
+			}
+
+			const failedHeader = $button.data('failed-msg');
+			const alreadyMsg = $button.data('already-msg');
+			const partialHeader = $button.data('partial-msg');
+			$button.addClass('loading disabled');
+			$.ajax({
+				url: `${globalRootUrl}${moduleAutoprovision.loadExamplesUrl}`,
+				type: 'POST',
+				dataType: 'json',
+			}).done((response) => {
+				const { installed = [], failed = [] } = response ?? {};
+				if (failed.length > 0) {
+					$button.removeClass('loading disabled');
+					const lines = [`Failed: ${failed.join(', ')}`];
+					if (installed.length > 0) {
+						lines.unshift(`Installed: ${installed.join(', ')}`);
+					}
+					UserMessage.showError(lines.join('<br>'), partialHeader || failedHeader);
+					return;
+				}
+				if (installed.length > 0) {
+					window.location.reload();
+					return;
+				}
+				$button.removeClass('loading disabled');
+				UserMessage.showInformation(alreadyMsg);
+			}).fail((jqXHR) => {
+				$button.removeClass('loading disabled');
+				const detail = `HTTP ${jqXHR.status}${jqXHR.statusText ? `: ${jqXHR.statusText}` : ''}`;
+				UserMessage.showError(detail, failedHeader);
+			});
 		});
 	},
 
