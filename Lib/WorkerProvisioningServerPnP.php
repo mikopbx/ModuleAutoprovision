@@ -57,17 +57,23 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $this->pbx_version = $mikoPBXConfig->getGeneralSettings('PBXVersion');
         $this->interfaces  = $network->getInterfacesNames();
 
+        // First-run safety: settings row may not exist yet (fresh install, mid-upgrade).
+        $pbxHost          = (string)($data->pbx_host ?? '');
+        $macWhiteRaw      = (string)($data->mac_white ?? '');
+        $macBlackRaw      = (string)($data->mac_black ?? '');
+        $additionalParams = (string)($data->additional_params ?? '');
+
         $protocol  = 'http';
-        $this->url = "$protocol://$data->pbx_host:$http_port/pbxcore/api/autoprovision";
+        $this->url = "$protocol://$pbxHost:$http_port/pbxcore/api/autoprovision";
 
         $re = '/\w{2}:?\w{2}:?\w{2}:?\w{2}:?\w{2}:?\w{2}/m';
 
-        preg_match_all($re, strtolower(str_replace(':', '', $data->mac_white??'')), $this->mac_white, PREG_SET_ORDER);
+        preg_match_all($re, strtolower(str_replace(':', '', $macWhiteRaw)), $this->mac_white, PREG_SET_ORDER);
         if (count($this->mac_white) > 0) {
             $this->mac_white = array_merge(...$this->mac_white);
         }
 
-        preg_match_all($re, strtolower(str_replace(':', '', $data->mac_black??'')), $this->mac_black, PREG_SET_ORDER);
+        preg_match_all($re, strtolower(str_replace(':', '', $macBlackRaw)), $this->mac_black, PREG_SET_ORDER);
         if (count($this->mac_black) > 0) {
             $this->mac_black = array_merge(...$this->mac_black);
         }
@@ -79,7 +85,7 @@ class WorkerProvisioningServerPnP extends WorkerBase
         }
 
         // Opt-in per-packet syslog noise: `[debug]\nverbose = 1` inside additional_params.
-        $this->verbose_syslog = $this->parseVerboseFlag((string)($data->additional_params ?? ''));
+        $this->verbose_syslog = $this->parseVerboseFlag($additionalParams);
     }
 
     /**

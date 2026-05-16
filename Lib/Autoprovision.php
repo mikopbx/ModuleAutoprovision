@@ -472,7 +472,11 @@ class Autoprovision extends Injectable
         $agi->set_variable('PROVISION_STATUS', 'OK');
 
         // Reboot the phone so it pulls the freshly generated config.
-        $this->clientNotifyReboot($ip, $port, $eth);
+        // Skip when ARP failed to resolve the interface — without $eth we'd build a
+        // NOTIFY with an empty Via/From host, and Network::getInterface('') is noisy.
+        if ($eth !== '') {
+            $this->clientNotifyReboot($ip, $port, $eth);
+        }
     }
 
     /**
