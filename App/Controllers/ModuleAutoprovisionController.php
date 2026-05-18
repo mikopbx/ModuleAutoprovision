@@ -1,15 +1,23 @@
 <?php
-/**
+
+declare(strict_types=1);
+/*
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
  * Proprietary and confidential
  * Written by Alexey Portnov, 10 2019
  */
+
 namespace Modules\ModuleAutoprovision\App\Controllers;
+
 use MikoPBX\AdminCabinet\Controllers\BaseController;
+use MikoPBX\AdminCabinet\Providers\AssetProvider;
 use MikoPBX\Common\Models\Extensions;
 use MikoPBX\Modules\PbxExtensionUtils;
+use Phalcon\Tag;
 use Modules\ModuleAutoprovision\App\Forms\ModuleAutoprovisionForm;
+use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+use Modules\ModuleAutoprovision\Lib\TemplateSeeder;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\OtherPBX;
 use Modules\ModuleAutoprovision\Models\Templates;
@@ -18,150 +26,252 @@ use Modules\ModuleAutoprovision\Models\TemplatesUsers;
 
 class ModuleAutoprovisionController extends BaseController
 {
-    private $moduleUniqueID =  'ModuleAutoprovision';
-    private $moduleDir;
+    private const MODULE_UNIQUE_ID = 'ModuleAutoprovision';
+
+    /**
+     * Map of form-section prefix → model class. Form input names use PHP array notation
+     * (e.g. <input name="templates_uri[7][uri]">), parsed by PHP into nested $_POST arrays.
+     * Array notation is required so the URL-encoded body cannot contain a literal "1=1"
+     * substring (which the nginx WAF blocks as a SQL-injection pattern). Keep this in sync
+     * with App/Views/index.volt and public/assets/js/src/module-autoprovision.js → tableMap.
+     */
+    private const TABLE_MAP = [
+        'templates'      => Templates::class,
+        'templates_uri'  => TemplatesUri::class,
+        'phone_settings' => TemplatesUsers::class,
+        'other_pbx'      => OtherPBX::class,
+    ];
+
+    /**
+     * Columns of ModuleAutoprovision that must never be writable through the admin form.
+     */
+    private const PROTECTED_COLUMNS = ['id', 'sip_secret'];
+
+    private string $moduleDir;
 
     public function initialize(): void
     {
-        $this->moduleDir           = PbxExtensionUtils::getModuleDir($this->moduleUniqueID);
-        $this->view->logoImagePath = "{$this->url->get()}assets/img/cache/{$this->moduleUniqueID}/logo.png";
+        $this->moduleDir           = PbxExtensionUtils::getModuleDir(self::MODULE_UNIQUE_ID);
+        $this->view->logoImagePath = "{$this->url->get()}assets/img/cache/" . self::MODULE_UNIQUE_ID . '/logo.png';
         $this->view->submitMode    = null;
         parent::initialize();
-
     }
 
     /**
-     * Форма настроек модуля
+     * Renders the module settings page.
      */
     public function indexAction(): void
     {
-        $footerCollection = $this->assets->collection('footerJS');
-        $footerCollection->addJs('js/pbx/main/form.js', true);
-        $footerCollection->addJs("js/cache/{$this->moduleUniqueID}/module-autoprovision-index.js", true);
-        $footerCollection->addJs('js/vendor/semantic/modal.min.js', true);
-        $footerCollection->addJs('js/vendor/jquery.tablednd.min.js', true);
+        $headerCss = $this->assets->collection(AssetProvider::HEADER_CSS);
+        $headerCss->addCss('css/cache/' . self::MODULE_UNIQUE_ID . '/module-autoprovision.css', true);
 
+        // Semantic UI's modal module is not part of MikoPBX's default bundle — the
+        // template-editor on the Templates tab relies on $.fn.modal, so we pull it in here.
+        $this->assets->collection(AssetProvider::SEMANTIC_UI_CSS)
+            ->addCss('css/vendor/semantic/modal.min.css', true);
+        $this->assets->collection(AssetProvider::SEMANTIC_UI_JS)
+            ->addJs('js/vendor/semantic/modal.min.js', true);
 
-        $headerCollectionCSS = $this->assets->collection('headerCSS');
-        $headerCollectionCSS->addCss('css/vendor/semantic/modal.min.css', true);
+        $footerJs = $this->assets->collection(AssetProvider::FOOTER_JS);
+        // Resumable.js powers the chunked firmware upload. FilesAPI and the
+        // FileUploadEventHandler globals are already in the default authenticated
+        // bundle (see AssetProvider::makeDefaultAssets); only Resumable itself
+        // is opt-in per page.
+        $footerJs
+            ->addJs('js/vendor/resumable.js', true)
+            ->addJs('js/pbx/main/form.js', true)
+            ->addJs('js/cache/' . self::MODULE_UNIQUE_ID . '/module-autoprovision.js', true)
+            ->addJs('js/cache/' . self::MODULE_UNIQUE_ID . '/module-autoprovision-firmware.js', true);
 
-        $settings = ModuleAutoprovision::findFirst();
-        if ($settings === null) {
-            $settings = new ModuleAutoprovision();
-        }
+        $settings = ModuleAutoprovision::findFirst() ?? new ModuleAutoprovision();
+        $this->view->form = new ModuleAutoprovisionForm($settings);
 
-        $this->view->form      = new ModuleAutoprovisionForm($settings);
+        $this->view->templates      = $this->prependEmptyRow(Templates::find()->toArray());
+        $this->view->templatesUsers = $this->prependEmptyRow(TemplatesUsers::find()->toArray());
+        $this->view->templatesUri   = $this->prependEmptyRow(TemplatesUri::find()->toArray());
+        $this->view->otherPBX       = $this->prependEmptyRow(OtherPBX::find()->toArray());
 
-        $templates = Templates::find()->toArray();
-        array_unshift($templates, ['id' => 'emptyTemplateRow']);
-        $this->view->templates = $templates;
+        $this->view->users = Extensions::find([
+            "type = 'SIP'",
+            'columns' => ['number', 'callerid', 'userid'],
+        ])->toArray();
 
-        $templatesUsers = TemplatesUsers::find()->toArray();
-        array_unshift($templatesUsers, ['id' => 'emptyTemplateRow']);
-        $this->view->templatesUsers = $templatesUsers;
-
-        $templatesUri = TemplatesUri::find()->toArray();
-        array_unshift($templatesUri, ['id' => 'emptyTemplateRow']);
-        $this->view->templatesUri = $templatesUri;
-
-        $otherPBX = OtherPBX::find()->toArray();
-        array_unshift($otherPBX, ['id' => 'emptyTemplateRow']);
-        $this->view->otherPBX = $otherPBX;
-
-        $this->view->users  = Extensions::find(["type = 'SIP'", 'columns' => ['number', 'callerid', 'userid']])->toArray();
-
-        $this->view->pick("{$this->moduleDir}/App/Views/index");
+        $this->view->pick("{$this->moduleDir}/App/Views/ModuleAutoprovision/index");
     }
 
     /**
-     * Сохранение настроек
+     * Persists the module's main settings and any inline tables edited on the form.
      */
-    public function saveAction():void
+    public function saveAction(): void
     {
-        if ( ! $this->request->isPost()) {
+        if (!$this->request->isPost()) {
             return;
         }
+        // Intentionally not running BaseController::sanitizeData() here: nested fields
+        // (templates[*][template], additional_params, vendor blocks) carry raw XML/INI
+        // bodies that the provisioning REST controller echoes back to phones verbatim.
+        // Phalcon's FILTER_STRING wraps values in htmlspecialchars(), which would corrupt
+        // those payloads and break provisioning after every save.
         $data   = $this->request->getPost();
-        $record = ModuleAutoprovision::findFirst();
-        if ($record === null) {
-            $record = new ModuleAutoprovision();
+        $record = ModuleAutoprovision::findFirst() ?? new ModuleAutoprovision();
+
+        $this->db->begin();
+
+        // Snapshot the model's column names; iterating $record directly is unreliable in Phalcon 5.
+        $columns = array_keys($record->toArray());
+        foreach ($columns as $column) {
+            if (in_array($column, self::PROTECTED_COLUMNS, true)) {
+                continue;
+            }
+            if ($column === 'extension' && isset($data['extension'])) {
+                $record->extension = (string)$data['extension'];
+                continue;
+            }
+            if ($column === 'http_port') {
+                // Clamp to the unprivileged range. Without this guard a typo
+                // like "80" would persist into the DB even though
+                // AutoprovisionConf::getHttpPort() validates on read — the
+                // saved-but-rejected value silently reverts to the default
+                // and confuses operators tracking down why the firewall row
+                // does not match the form they just submitted.
+                $raw = $data['http_port'] ?? '';
+                $clean = filter_var((string)$raw, FILTER_VALIDATE_INT, [
+                    'options' => ['min_range' => 1024, 'max_range' => 65535],
+                ]);
+                $record->http_port = $clean === false
+                    ? (string)AutoprovisionConf::DEFAULT_HTTP_PORT
+                    : (string)$clean;
+                continue;
+            }
+            if ($column === 'tftp_enabled') {
+                // HTML checkboxes only POST when ticked. An absent key means
+                // "off"; any other value normalises to '1'.
+                $record->tftp_enabled = empty($data['tftp_enabled']) ? '0' : '1';
+                continue;
+            }
+            if (!array_key_exists($column, $data)) {
+                // Field absent from this POST — preserve whatever was already
+                // stored. Overwriting with '' wiped previously-saved values
+                // when the form was submitted from a tab that didn't render
+                // the input (typical for pbx_host, which lives on the PnP tab).
+                continue;
+            }
+            $record->{$column} = $data[$column];
         }
 
-        $extension = $record->Extensions;
-        $this->db->begin();
-        foreach ($record as $key => $value) {
-            switch ($key) {
-                case 'id':
-                    break;
-                case 'extension':
-                    $record->$key      = $data[$key];
-                    $extension->number = $data[$key];
-                    break;
-                default:
-                    if ( ! array_key_exists($key, $data)) {
-                        $record->$key = '';
-                    } else {
-                        $record->$key = $data[$key];
-                    }
+        if ($record->save() === false) {
+            $this->flash->error(implode('<br>', $record->getMessages()));
+            $this->view->success = false;
+            $this->db->rollback();
+            return;
+        }
+
+        // Keep the Extensions row's number in sync with the dialplan pattern.
+        if (isset($data['extension'])) {
+            $extensionRow = $record->Extensions ?? Extensions::findFirst([
+                'number = :number:',
+                'bind' => ['number' => (string)$data['extension']],
+            ]);
+            if ($extensionRow !== null) {
+                $extensionRow->number = (string)$data['extension'];
+                if ($extensionRow->save() === false) {
+                    $this->flash->error(implode('<br>', $extensionRow->getMessages()));
+                    $this->view->success = false;
+                    $this->db->rollback();
+                    return;
+                }
             }
         }
-        if ($record->save() === false || $extension->save() === false) {
-            $errors = $record->getMessages();
-            $this->flash->error(implode('<br>', $errors));
-            $errors = $extension->getMessages();
-            $this->flash->error(implode('<br>', $errors));
-            $this->view->success = false;
-
-            $this->db->rollback();
-
-            return;
-        }
-
 
         $resultSaveTables = $this->saveAdditionalTables($data);
 
-        $this->flash->success($this->translation->_('ms_SuccessfulSaved') . $record->additional_params);
-        $this->view->success = true;
+        $this->flash->success($this->translation->_('ms_SuccessfulSaved'));
+        $this->view->success          = true;
         $this->view->resultSaveTables = $resultSaveTables;
 
         $this->db->commit();
     }
 
-    private function saveAdditionalTables($data):array
+    /**
+     * Installs the bundled vendor example templates on demand.
+     *
+     * Idempotent: TemplateSeeder skips any seed whose `name` already exists in
+     * m_Templates, so clicking the button twice never produces duplicates. The
+     * JS handler reloads the page on success so the new rows appear in the table.
+     *
+     * Returns JSON (the BaseController serializes view params for AJAX) with
+     * per-category name lists; flash isn't used because BaseController consumes
+     * the flash queue while building the AJAX response, and a queued message
+     * would not survive the page reload that follows.
+     */
+    public function loadExampleTemplatesAction(): void
+    {
+        // BaseController::initialize() builds the page title from
+        // "Breadcrumb{$controllerName}{$actionName}" for any non-canonical action,
+        // which for this endpoint becomes the un-translated key
+        // `BreadcrumbModuleAutoprovisionload-example-templates`. Re-use the index
+        // breadcrumb so AJAX clients that surface the title (or curl debug runs)
+        // see the same label as the parent page.
+        Tag::setTitle('MikoPBX|' . $this->translation->_('BreadcrumbModuleAutoprovision'));
+
+        if (!$this->request->isPost()) {
+            $this->view->success = false;
+            $this->view->message = $this->translation->_('mod_Autoprovision_load_examples_post_only');
+            return;
+        }
+
+        $report = TemplateSeeder::seed();
+
+        $this->view->success   = $report['failed'] === [];
+        $this->view->installed = $report['installed'];
+        $this->view->skipped   = $report['skipped'];
+        $this->view->failed    = $report['failed'];
+    }
+
+    /**
+     * Returns the table → [oldId → newId] map used by the JS layer to re-bind inserted rows.
+     *
+     * Rows carrying `__delete = 1` are removed from the database in the same transaction
+     * instead of being saved; the JS layer marks rows for deletion and submits them via
+     * the standard save flow, so there is no separate delete endpoint.
+     *
+     * @param array<string, mixed> $data Raw POST body. Editable tables arrive as nested arrays
+     *                                    keyed by table prefix → row id → column (PHP array notation).
+     * @return array<string, array<string, string>>
+     */
+    private function saveAdditionalTables(array $data): array
     {
         $results = [];
-        $additionalTables = [
-            'templates'     => Templates::class,
-            'templates_uri' => TemplatesUri::class,
-            'phone_settings'=> TemplatesUsers::class,
-            'other_pbx'     => OtherPBX::class,
-        ];
 
-        $tablesData = [];
-        foreach ($data as $key => $value) {
-            [$table, $column, $id] = explode('-', $key);
-            if(!array_key_exists($table, $additionalTables)){
+        foreach (self::TABLE_MAP as $table => $class) {
+            if (!isset($data[$table]) || !is_array($data[$table])) {
                 continue;
             }
-            $tablesData[$table][$id][$column] = $value;
-        }
-        foreach ($tablesData as $table => $dataForWrite){
-            foreach ($dataForWrite as $id => $rowData){
-                if('emptyTemplateRow' === $id){
+            foreach ($data[$table] as $id => $rowData) {
+                if ($id === 'emptyTemplateRow' || !is_array($rowData)) {
                     continue;
                 }
-                $class = $additionalTables[$table];
-                /** @var Templates $class */
-                /** @var Templates $dbRowData */
-                $dbRowData = $class::findFirst("id='$id'");
-                if(!$dbRowData){
-                    $dbRowData = new $class();
+                /** @var \Phalcon\Mvc\Model|null $dbRow */
+                $dbRow = $class::findFirst([
+                    'id = :id:',
+                    'bind' => ['id' => $id],
+                ]);
+                if (!empty($rowData['__delete'])) {
+                    $dbRow?->delete();
+                    continue;
                 }
-                foreach ($rowData as $key => $value){
-                    $dbRowData->$key = $value;
+                if ($dbRow === null) {
+                    $dbRow = new $class();
                 }
-                $dbRowData->save();
-                $results[$table][$id] = $dbRowData->id;
+                foreach ($rowData as $column => $value) {
+                    if ($column === '__delete') {
+                        continue;
+                    }
+                    $dbRow->{$column} = $value;
+                }
+                if ($dbRow->save()) {
+                    $results[$table][$id] = (string)$dbRow->id;
+                }
             }
         }
 
@@ -169,40 +279,14 @@ class ModuleAutoprovisionController extends BaseController
     }
 
     /**
-     * Delete phonebook record
+     * Prepends a template-row placeholder used by the JS layer to clone new rows from.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
      */
-    public function deleteAction(): void
+    private function prependEmptyRow(array $rows): array
     {
-        $table     = $this->request->get('table');
-        $className = $this->getClassName($table);
-        if(empty($className)) {
-            $this->view->success = false;
-            return;
-        }
-        $id     = $this->request->get('id');
-        $record = $className::findFirstById($id);
-        if ($record !== null && ! $record->delete()) {
-            $this->flash->error(implode('<br>', $record->getMessages()));
-            $this->view->success = false;
-            return;
-        }
-        $this->view->success = true;
-    }
-
-    /**
-     * Получение имени класса по имени таблицы
-     * @param $tableName
-     * @return string
-     */
-    private function getClassName($tableName):string
-    {
-        if(empty($tableName)){
-            return '';
-        }
-        $className = "Modules\ModuleAutoprovision\Models\\$tableName";
-        if(!class_exists($className)){
-            $className = '';
-        }
-        return $className;
+        array_unshift($rows, ['id' => 'emptyTemplateRow']);
+        return $rows;
     }
 }

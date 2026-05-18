@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /*
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
@@ -14,108 +16,342 @@ use MikoPBX\Core\Asterisk\AGI;
 use MikoPBX\Core\System\MikoPBXConfig;
 use MikoPBX\Core\System\Network;
 use MikoPBX\Core\System\Util;
+use MikoPBX\Core\System\SystemMessages;
+use Modules\ModuleAutoprovision\Lib\RestAPI\Firmware\Repository as FirmwareRepository;
+use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionUsers;
+use Modules\ModuleAutoprovision\Models\Templates;
+use Modules\ModuleAutoprovision\Models\TemplatesUsers;
 use Phalcon\Di\Injectable;
 
 class Autoprovision extends Injectable
 {
-
-    protected $tempDir;
-    protected $mikoPBXConfig;
+    protected string $tempDir;
+    protected MikoPBXConfig $mikoPBXConfig;
 
     public function __construct()
     {
-        $this->tempDir    = $this->di->getShared('config')->path('core.tempDir');
-        $this->mikoPBXConfig    = new MikoPBXConfig();
+        $this->tempDir       = (string)$this->di->getShared('config')->path('core.tempDir');
+        $this->mikoPBXConfig = new MikoPBXConfig();
     }
 
     /**
-     * Создание конфига телефона.
+     * Generates the vendor-specific provisioning config file for the phone identified by $req_data['mac'].
      *
-     * @param $req_data
-     *
-     * @return string
+     * @param array $req_data Provisioning request payload (must include 'mac' and 'vendor').
+     * @return string Absolute path to the generated config, or '' if the phone is unknown.
      */
-    public function generateConfigPhone($req_data): string
+    public function generateConfigPhone(array $req_data): string
     {
-        $phone_data = ModuleAutoprovisionDevice::findFirst("mac='{$req_data['mac']}'");
-        if ($phone_data === null) {
+        $mac = (string)($req_data['mac'] ?? '');
+        if ($mac === '') {
             return '';
         }
-        $sip_data  = [];
-        $user_data = ModuleAutoprovisionUsers::find("id_phone='{$phone_data->id}'");
-        foreach ($user_data as $data) {
-            $exten = Extensions::findFirst("userid='{$data->userid}' AND type='SIP'");
-            if ($exten !== null) {
-                $sip = Sip::findFirst("extension='$exten->number'");
-                if ($sip !== null) {
-                    $sip_data[$data->line] = [
-                        'extension' => $sip->extension,
-                        'secret'    => $sip->secret,
-                        'callerid'  => $exten->callerid,
-                    ];
-                }
-            }
+
+        $phoneData = ModuleAutoprovisionDevice::findFirst([
+            'mac = :mac:',
+            'bind' => ['mac' => $mac],
+        ]);
+        if ($phoneData === null) {
+            return '';
         }
-        if (empty($sip_data)) {
-            $def_peer      = [
+
+        $sipData  = [];
+        $userData = ModuleAutoprovisionUsers::find([
+            'id_phone = :id_phone:',
+            'bind' => ['id_phone' => $phoneData->id],
+        ]);
+        foreach ($userData as $row) {
+            $exten = Extensions::findFirst([
+                'userid = :userid: AND type = :type:',
+                'bind' => ['userid' => $row->userid, 'type' => 'SIP'],
+            ]);
+            if ($exten === null) {
+                continue;
+            }
+            $sip = Sip::findFirst([
+                'extension = :extension:',
+                'bind' => ['extension' => $exten->number],
+            ]);
+            if ($sip === null) {
+                continue;
+            }
+            $sipData[$row->line] = [
+                'extension' => $sip->extension,
+                'secret'    => $sip->secret,
+                'callerid'  => $exten->callerid,
+            ];
+        }
+
+        if (empty($sipData)) {
+            $defPeer = [
                 'extension' => AutoprovisionConf::SIP_USER,
-                'secret'    => AutoprovisionConf::SIP_SECRET,
+                'secret'    => AutoprovisionConf::getSipSecret(),
                 'callerid'  => AutoprovisionConf::SIP_USER,
             ];
-            $sip_data['1'] = $def_peer;
-            if ($req_data['model'] === 'W52P') {
-                // DECT база. Тут настройка особенная, несколько SIP аккаунтов - 5шт.
-                $sip_data['2'] = $def_peer;
-                $sip_data['3'] = $def_peer;
-                $sip_data['4'] = $def_peer;
-                $sip_data['5'] = $def_peer;
+            $sipData['1'] = $defPeer;
+            if (($req_data['model'] ?? '') === 'W52P') {
+                // W52P DECT base station: configure 5 SIP accounts using the default peer.
+                $sipData['2'] = $defPeer;
+                $sipData['3'] = $defPeer;
+                $sipData['4'] = $defPeer;
+                $sipData['5'] = $defPeer;
             }
         }
-        switch ($req_data['vendor']) {
-            case 'yealink':
-                $confManager = new AutoprovisionYealink();
-                break;
-            case 'fanvil':
-                $confManager = new AutoprovisionFanvil();
-                break;
-            case 'snom':
-                $confManager = new AutoprovisionSnom();
-                break;
-            default:
-                return '';
+
+        // Resolve {FIRMWARE_URL} once and surface it to every vendor generator
+        // through $req_data so the per-vendor classes emit the correct config
+        // key ('firmware.url' for Yealink, '<AUTOUPDATE>FirmwareUpgrade' for
+        // Fanvil, P192/P237 for Grandstream, 'auto_image_url' for Htek, etc.).
+        // Empty string when no matching firmware row exists — generators must
+        // suppress the line in that case.
+        $req_data['firmware_url'] = FirmwareRepository::resolveFirmwareUrl(
+            (string)($req_data['vendor'] ?? ''),
+            isset($req_data['model']) ? (string)$req_data['model'] : null
+        );
+
+        $confManager = match ($req_data['vendor'] ?? '') {
+            'yealink'     => new AutoprovisionYealink(),
+            'fanvil'      => new AutoprovisionFanvil(),
+            'snom'        => new AutoprovisionSnom(),
+            'grandstream' => new AutoprovisionGrandstream(),
+            'htek'        => new AutoprovisionHtek(),
+            default       => null,
+        };
+        if ($confManager === null) {
+            return '';
         }
 
-        return $confManager->generateConfig($req_data, $sip_data);
+        return $confManager->generateConfig($req_data, $sipData);
     }
 
+    /**
+     * Renders the per-MAC `TemplatesUsers`-bound config for `$mac` and returns
+     * the body as a string, or null when no template is mapped to the MAC.
+     *
+     * Shared by both the HTTP per-MAC endpoint (`GetController::getConfigStatic`)
+     * and the TFTP server (`WorkerTftpServer::resolveFile`) so the two channels
+     * produce byte-identical output for the same MAC. The legacy
+     * `generateConfigPhone()` multi-account flow remains the fallback when no
+     * mapping exists.
+     *
+     * Placeholder pipeline (order matters):
+     *   1. `{PBX_HOST}` / `{FIRMWARE_URL}` — generic, evaluated once.
+     *   2. `{SIP_NUM}` / `{SIP_USER_NAME}` / `{SIP_PASS}` — per-user, looked up
+     *      from `TemplatesUsers.userId` -> `Extensions` + `Sip`.
+     */
+    public static function renderTemplateConfig(string $mac, string $userAgent, ?string $vendorHint = null): ?string
+    {
+        $mac = strtolower(trim($mac));
+        if ($mac === '') {
+            return null;
+        }
+        $di = \Phalcon\Di\Di::getDefault();
+        if ($di === null) {
+            return null;
+        }
+        $manager = $di->get('modelsManager');
 
+        $parameters = [
+            'models'     => [
+                'TemplatesUsers' => TemplatesUsers::class,
+            ],
+            'conditions' => ':mac: LIKE TemplatesUsers.mac',
+            'bind'       => ['mac' => $mac],
+            'columns'    => [
+                'id'       => 'TemplatesUsers.id',
+                'template' => 'Templates.template',
+                'userId'   => 'TemplatesUsers.userId',
+            ],
+            'limit'      => 1,
+            'joins'      => [
+                'TemplatesUsers' => [
+                    0 => Templates::class,
+                    1 => 'Templates.id = TemplatesUsers.templateId',
+                    2 => 'Templates',
+                    3 => 'LEFT',
+                ],
+            ],
+        ];
+        $row = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
+        if (empty($row)) {
+            return null;
+        }
+        $template = (string)($row[0]['template'] ?? '');
+        if ($template === '') {
+            return null;
+        }
+
+        // Lookup SIP credentials for the bound user (matches the per-MAC branch in
+        // GetController::getConfigStatic).
+        $sipParameters = [
+            'models'     => [
+                'Extensions' => Extensions::class,
+            ],
+            'conditions' => ':userid: = Extensions.userid',
+            'bind'       => ['userid' => $row[0]['userId']],
+            'columns'    => [
+                '{SIP_USER_NAME}' => 'Extensions.callerid',
+                '{SIP_NUM}'       => 'Extensions.number',
+                '{SIP_PASS}'      => 'Sip.secret',
+            ],
+            'ORDER'      => 'mac DESC',
+            'limit'      => 1,
+            'joins'      => [
+                'Extensions' => [
+                    0 => Sip::class,
+                    1 => 'Extensions.number = Sip.extension',
+                    2 => 'Sip',
+                    3 => 'LEFT',
+                ],
+            ],
+        ];
+        $sipRow = $manager->createBuilder($sipParameters)->getQuery()->execute()->toArray();
+        $sipData = ['{SIP_NUM}' => '', '{SIP_USER_NAME}' => '', '{SIP_PASS}' => ''];
+        if (!empty($sipRow)) {
+            $sipData = $sipRow[0];
+        }
+
+        // Vendor/model lookup for {FIRMWARE_URL}. Resolution order:
+        //   1. User-Agent header (HTTP path — phones always include their vendor
+        //      string there).
+        //   2. Device record's manufacturer_model (populated by PnP discovery).
+        //   3. Caller-supplied $vendorHint (TFTP path: WorkerTftpServer infers it
+        //      from the filename prefix before PnP has recorded the device).
+        // Without (3), a TFTP request for a manually-mapped MAC whose device row
+        // has no manufacturer_model yet would yield vendor='' and {FIRMWARE_URL}=''
+        // even though the HTTP path could resolve it. That would re-introduce the
+        // HTTP/TFTP byte-identity drift this renderer exists to prevent.
+        $vendor = self::detectVendorFromUserAgent($userAgent);
+        $model  = null;
+        $device = ModuleAutoprovisionDevice::findFirst([
+            'mac = :mac:',
+            'bind' => ['mac' => $mac],
+        ]);
+        if ($device !== null && !empty($device->manufacturer_model)) {
+            $mm = (string)$device->manufacturer_model;
+            if ($vendor === '') {
+                $mmLower = strtolower($mm);
+                foreach (array_keys(FirmwareRepository::VENDOR_EXTENSIONS) as $candidate) {
+                    if (str_contains($mmLower, $candidate)) {
+                        $vendor = $candidate;
+                        break;
+                    }
+                }
+            }
+            $model = self::extractModel($mm);
+        }
+        if ($vendor === '' && $vendorHint !== null) {
+            $hint = strtolower(trim($vendorHint));
+            if ($hint !== '' && isset(FirmwareRepository::VENDOR_EXTENSIONS[$hint])) {
+                $vendor = $hint;
+            }
+        }
+
+        return self::applyGenericPlaceholders($template, $vendor, $model, $sipData);
+    }
 
     /**
-     * Отправка запроса NOTIFY на телефон.
+     * Substitutes the generic ({PBX_HOST}, {FIRMWARE_URL}) and per-user ({SIP_*})
+     * placeholders into a template body. Generic pass runs first so a template
+     * authoring {FIRMWARE_URL} inside a {SIP_*} block still renders correctly.
      *
-     * @param $ip_phone
-     * @param $port_phone
-     * @param $eth
+     * @param array<string,string> $sipReplacements
      */
-    public function clientNotifyReboot($ip_phone, $port_phone, $eth): void
+    public static function applyGenericPlaceholders(
+        string $template,
+        string $vendor,
+        ?string $model,
+        array $sipReplacements = []
+    ): string {
+        $settings = ModuleAutoprovision::findFirst();
+        $generic  = [
+            '{FIRMWARE_URL}' => FirmwareRepository::resolveFirmwareUrl($vendor, $model),
+            '{PBX_HOST}'     => $settings !== null ? (string)($settings->pbx_host ?? '') : '',
+        ];
+        $rendered = strtr($template, $generic);
+        if (!empty($sipReplacements)) {
+            $rendered = str_replace(
+                array_keys($sipReplacements),
+                array_values($sipReplacements),
+                $rendered
+            );
+        }
+        return $rendered;
+    }
+
+    /**
+     * Best-effort vendor detection from the phone's User-Agent header.
+     */
+    public static function detectVendorFromUserAgent(string $userAgent): string
     {
-        $sock = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+        $ua = strtolower($userAgent);
+        foreach (['yealink', 'snom', 'fanvil', 'grandstream', 'htek'] as $vendor) {
+            if ($ua !== '' && str_contains($ua, $vendor)) {
+                return $vendor;
+            }
+        }
+        return '';
+    }
 
-        $net        = new Network();
-        $eth        = $net->getInterface($eth);
-        $ip_pbx     = $eth['ipaddr'];
-        $port_pbx   = $this->mikoPBXConfig->getGeneralSettings('SIPPort');
-        $phone_user = AutoprovisionConf::SIP_USER;
+    /**
+     * Extracts the model name from `ModuleAutoprovisionDevice.manufacturer_model`.
+     * Mirrors GetController::extractModel — kept here so the TFTP path doesn't
+     * have to depend on the HTTP controller.
+     */
+    public static function extractModel(string $manufacturerModel): ?string
+    {
+        $raw = trim($manufacturerModel);
+        if ($raw === '') {
+            return null;
+        }
+        $slash = strpos($raw, '/');
+        if ($slash !== false) {
+            $tail = trim(substr($raw, $slash + 1));
+            return $tail === '' ? null : $tail;
+        }
+        $parts = preg_split('/\s+/', $raw) ?: [];
+        if ($parts !== [] && in_array(strtolower($parts[0]), ['yealink', 'snom', 'fanvil', 'grandstream', 'htek'], true)) {
+            array_shift($parts);
+        }
+        $tail = trim(implode(' ', $parts));
+        return $tail === '' ? null : $tail;
+    }
 
-        $msg = "NOTIFY sip:{$phone_user}@{$ip_phone}:{$port_phone};ob SIP/2.0\r\n" .
-            "Via: SIP/2.0/UDP {$ip_pbx}:{$port_pbx};branch=z9hG4bK12fd4e5c;rport\r\n" .
+    /**
+     * Sends a SIP NOTIFY with Event: check-sync;reboot=true to the given phone.
+     */
+    public function clientNotifyReboot(string $ipPhone, int $portPhone, string $eth): void
+    {
+        if (!filter_var($ipPhone, FILTER_VALIDATE_IP) || $portPhone <= 0 || $portPhone > 65535) {
+            return;
+        }
+
+        $sock = @socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+        if ($sock === false) {
+            SystemMessages::sysLogMsg(
+                WorkerProvisioningServerPnP::LOG_TAG,
+                "clientNotifyReboot: socket_create(SOCK_DGRAM) failed: " . socket_strerror(socket_last_error())
+                    . " (target $ipPhone:$portPhone)",
+                LOG_ERR
+            );
+            return;
+        }
+
+        $net          = new Network();
+        $ethInterface = $net->getInterface($eth);
+        $ipPbx        = (string)($ethInterface['ipaddr'] ?? '');
+        $portPbx      = (string)$this->mikoPBXConfig->getGeneralSettings('SIPPort');
+        $phoneUser    = AutoprovisionConf::SIP_USER;
+
+        $msg = "NOTIFY sip:{$phoneUser}@{$ipPhone}:{$portPhone};ob SIP/2.0\r\n" .
+            "Via: SIP/2.0/UDP {$ipPbx}:{$portPbx};branch=z9hG4bK12fd4e5c;rport\r\n" .
             "Max-Forwards: 70\r\n" .
-            "From: \"asterisk\" <sip:asterisk@{$ip_pbx}>;tag=as54cd2be9\r\n" .
-            "To: <sip:{$phone_user}@{$ip_phone}:{$port_phone};ob>\r\n" .
-            "Contact: <sip:asterisk@{$ip_pbx}:{$port_pbx}>\r\n" .
-            "Call-ID: 4afab6ce2bff0be11a4af41064340242@{$ip_pbx}:{$port_pbx}>\r\n" .
+            "From: \"asterisk\" <sip:asterisk@{$ipPbx}>;tag=as54cd2be9\r\n" .
+            "To: <sip:{$phoneUser}@{$ipPhone}:{$portPhone};ob>\r\n" .
+            "Contact: <sip:asterisk@{$ipPbx}:{$portPbx}>\r\n" .
+            "Call-ID: 4afab6ce2bff0be11a4af41064340242@{$ipPbx}:{$portPbx}\r\n" .
             "CSeq: 102 NOTIFY\r\n" .
             "User-Agent: mikopbx\r\n" .
             "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, SUBSCRIBE, NOTIFY, INFO, PUBLISH, MESSAGE\r\n" .
@@ -124,108 +360,150 @@ class Autoprovision extends Injectable
             "Event: check-sync;reboot=true\r\n" .
             "Content-Length: 0\r\n\n";
 
-        $len = strlen($msg);
-        socket_sendto($sock, $msg, $len, 0, $ip_phone, $port_phone);
+        $sent = @socket_sendto($sock, $msg, strlen($msg), 0, $ipPhone, $portPhone);
+        if ($sent === false) {
+            SystemMessages::sysLogMsg(
+                WorkerProvisioningServerPnP::LOG_TAG,
+                "clientNotifyReboot: socket_sendto $ipPhone:$portPhone failed: "
+                    . socket_strerror(socket_last_error($sock)),
+                LOG_ERR
+            );
+        } else {
+            SystemMessages::sysLogMsg(
+                WorkerProvisioningServerPnP::LOG_TAG,
+                "clientNotifyReboot: check-sync NOTIFY sent to $ipPhone:$portPhone via $eth",
+                LOG_NOTICE
+            );
+        }
         socket_close($sock);
     }
 
     /**
-     * AGI скрипт для запроса настройки телефона.
+     * AGI handler executed by the autoprovision dialplan context.
+     * Looks up the calling phone, binds its MAC to the dialing extension,
+     * and triggers a reboot so the phone re-fetches its config.
      */
     public function StartAGIProvision(): void
     {
         $agi = new AGI();
-        $row = $agi->get_variable('PT1C_VIA', true);
-        preg_match_all('/\d+.\d+.\d+.\d+:?\d*/m', $row, $matches, PREG_SET_ORDER);
-        if (!empty($matches) && count($matches[0]) === 1) {
-            $res = explode(':', $matches[0][0]);
-            [$ip, $port] = $res;
+        $row = (string)$agi->get_variable('PT1C_VIA', true);
+        // Match an IPv4 address with an optional :port suffix. The dot is escaped properly.
+        preg_match_all('/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):?(\d*)/m', $row, $matches);
+        if (empty($matches[1][0])) {
+            return;
+        }
+        $ip   = $matches[1][0];
+        $port = (int)($matches[2][0] ?: 0);
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            return;
+        }
 
-            $tmp_data = explode('*', $agi->request['agi_extension']);
-            $sip_id   = array_pop($tmp_data);
-            $agi->noop("{$agi->request['agi_extension']}  $sip_id");
-            /** @var  \MikoPBX\Common\Models\Extensions; $exten */
-            $exten = Extensions::findFirst("number='{$sip_id}'");
-            if ($exten === null) {
-                $agi->set_variable('PROVISION_STATUS', 'EXTEN_NOT_FOUND');
-                return;
-            }
+        $agiExtension = (string)($agi->request['agi_extension'] ?? '');
+        $tmpData      = explode('*', $agiExtension);
+        $sipId        = (string)array_pop($tmpData);
+        $agi->noop("{$agiExtension}  {$sipId}");
 
-            $phone_data = null;
-            exec("timeout -t 1 ping {$ip} -c 1");
-            // Анализируем MAC адрес устройства.
-            $arp = Util::which('arp');
-            $awk = Util::which('awk');
-            exec("$arp -D {$ip} -n | $awk  '{ print $4 \" \" $7}' 2>&1", $out);
+        $exten = Extensions::findFirst([
+            'number = :number:',
+            'bind' => ['number' => $sipId],
+        ]);
+        if ($exten === null) {
+            $agi->set_variable('PROVISION_STATUS', 'EXTEN_NOT_FOUND');
+            return;
+        }
 
-            [$mac, $eth] = explode(' ', $out[0] ?? '');
-            $mac = str_replace(':', '', $mac);
-            // Телефон мог сменить ip адрес. Попробуем получить его из ARP таблицы.
-            $agi->noop('arp - ' . implode('', $out) . '.');
-            if ( ! empty($eth)) {
-                /** @var ModuleAutoprovisionDevice $phone_data */
-                // Ищем по mac адресу.
-                $phone_data = ModuleAutoprovisionDevice::findFirst("mac='{$mac}'");
-            }
-            $agi->noop("eth - {$eth}; mac - {$mac}");
-            if ( ! $phone_data) {
-                // Ищем по IP адресу.
-                $phone_data = ModuleAutoprovisionDevice::findFirst("host='{$ip}'");
-            }
+        // Populate ARP table by pinging the phone (escape the IP to avoid shell injection).
+        $safeIp = escapeshellarg($ip);
+        exec("timeout -t 1 ping {$safeIp} -c 1");
 
-            if ($phone_data !== null && ! empty($phone_data->mac)) {
-                if (false !== stripos($phone_data->manufacturer_model, 'W52P')) {
-                    // Для DECT трубки определим номер линии из заголовка Call-ID.
-                    $call_id = $agi->get_variable('SIP_HEADER(Call-ID)', true);
-                    $agi->noop("call_id - $call_id.");
-                    // Номер линии находится до символа "_"
-                    // 0_47643482@172.16.32.59
-                    $params = explode(' ', $call_id);
-                    // Нумерация линий начинается с 0.
-                    $line = (count($params) > 1) ? ($params[0] + 1) : 1;
-                } else {
-                    $line = 1;
-                }
-                $Auto_Provision_User = ModuleAutoprovisionUsers::findFirst(
-                    "id_phone={$phone_data->id} AND line='{$line}'"
-                );
-                if ($Auto_Provision_User === null) {
-                    $Auto_Provision_User           = new ModuleAutoprovisionUsers();
-                    $Auto_Provision_User->id_phone = $phone_data->id;
-                }
-                $Auto_Provision_User->line   = $line;
-                $Auto_Provision_User->userid = $exten->userid;
-                $Auto_Provision_User->save();
+        $arp = Util::which('arp');
+        $awk = Util::which('awk');
+        exec("{$arp} -D {$safeIp} -n | {$awk}  '{ print \$4 \" \" \$7}' 2>&1", $out);
 
-                $agi->set_variable('PROVISION_STATUS', 'OK');
+        [$mac, $eth] = array_pad(explode(' ', $out[0] ?? ''), 2, '');
+        $mac = str_replace(':', '', $mac);
+        $agi->noop('arp - ' . implode('', $out) . '.');
 
-                // Тут все ОК, нужно перезагрузить телефон.
-                $this->clientNotifyReboot($ip, $port, $eth);
-            } else {
-                // Записать в syslog. Обработать fail2ban.
-                $agi->set_variable('PROVISION_STATUS', 'PHONE_NOT_FOUND');
-            }
+        $phoneData = null;
+        if ($eth !== '' && $mac !== '') {
+            $phoneData = ModuleAutoprovisionDevice::findFirst([
+                'mac = :mac:',
+                'bind' => ['mac' => $mac],
+            ]);
+        }
+        $agi->noop("eth - {$eth}; mac - {$mac}");
+        if ($phoneData === null) {
+            // The phone may have changed its IP — fall back to ARP-table lookup by host.
+            $phoneData = ModuleAutoprovisionDevice::findFirst([
+                'host = :host:',
+                'bind' => ['host' => $ip],
+            ]);
+        }
+
+        if ($phoneData === null || empty($phoneData->mac)) {
+            // Log and let fail2ban handle repeated provisioning attempts from unknown phones.
+            $agi->set_variable('PROVISION_STATUS', 'PHONE_NOT_FOUND');
+            return;
+        }
+
+        if (stripos((string)$phoneData->manufacturer_model, 'W52P') !== false) {
+            // For a DECT handset, the line number comes from the Call-ID header.
+            $callId = (string)$agi->get_variable('SIP_HEADER(Call-ID)', true);
+            $agi->noop("call_id - {$callId}.");
+            // Line numbers start at 0 — Call-ID format: "0_47643482@172.16.32.59".
+            $params = explode(' ', $callId);
+            $line   = (count($params) > 1) ? ((int)$params[0] + 1) : 1;
+        } else {
+            $line = 1;
+        }
+
+        $provUser = ModuleAutoprovisionUsers::findFirst([
+            'id_phone = :id_phone: AND line = :line:',
+            'bind' => ['id_phone' => $phoneData->id, 'line' => (string)$line],
+        ]);
+        if ($provUser === null) {
+            $provUser           = new ModuleAutoprovisionUsers();
+            $provUser->id_phone = $phoneData->id;
+        }
+        $provUser->line   = (string)$line;
+        $provUser->userid = $exten->userid;
+        $provUser->save();
+
+        $agi->set_variable('PROVISION_STATUS', 'OK');
+
+        // Reboot the phone so it pulls the freshly generated config.
+        // Skip when ARP failed to resolve the interface — without $eth we'd build a
+        // NOTIFY with an empty Via/From host, and Network::getInterface('') is noisy.
+        if ($eth !== '') {
+            $this->clientNotifyReboot($ip, $port, $eth);
         }
     }
 
-
     /**
-     * Разбор INI конфига
+     * Parses an INI-like blob of vendor-specific overrides keyed by section name.
      *
-     * @param $manual_attributes
+     * The input may be base64-encoded. We only treat it as base64 when the strict_types
+     * round-trip succeeds and the decoded payload contains an INI section marker — otherwise
+     * arbitrary base64-shaped strings would be silently rewritten.
      *
-     * @return array
+     * @param string|null $manualAttributes Either raw INI text or its base64-encoded
+     *                                       form. The Phalcon model returns NULL for
+     *                                       unpopulated additional_params columns, so
+     *                                       we accept null and treat it as "no overrides".
+     * @return array<string, string> Map of section name to raw section body.
      */
-    public static function parseIniSettings($manual_attributes): array
+    public static function parseIniSettings(?string $manualAttributes): array
     {
-        $tmp_data = base64_decode($manual_attributes);
-        if (base64_encode($tmp_data) === $manual_attributes) {
-            $manual_attributes = $tmp_data;
+        if ($manualAttributes === null || $manualAttributes === '') {
+            return [];
         }
-        unset($tmp_data);
-        // TRIMMING
-        $tmp_arr = explode("\n", $manual_attributes);
-        foreach ($tmp_arr as &$row) {
+        $decoded = base64_decode($manualAttributes, true);
+        if ($decoded !== false && base64_encode($decoded) === $manualAttributes && str_contains($decoded, '[')) {
+            $manualAttributes = $decoded;
+        }
+
+        $tmpArr = explode("\n", $manualAttributes);
+        foreach ($tmpArr as &$row) {
             $row = trim($row);
             $pos = strpos($row, ']');
             if ($pos !== false && strpos($row, '[') === 0) {
@@ -233,20 +511,19 @@ class Autoprovision extends Injectable
             }
         }
         unset($row);
-        $manual_attributes = implode("\n", $tmp_arr);
-        // TRIMMING END
+        $manualAttributes = implode("\n", $tmpArr);
 
-        $manual_data = [];
-        $sections    = explode("\n[", str_replace(']', '', $manual_attributes));
+        $manualData = [];
+        $sections   = explode("\n[", str_replace(']', '', $manualAttributes));
         foreach ($sections as $section) {
-            $data_rows    = explode("\n", trim($section));
-            $section_name = trim($data_rows[0] ?? '');
-            if ( ! empty($section_name)) {
-                unset($data_rows[0]);
-                $manual_data[$section_name] = implode("\n", $data_rows);
+            $dataRows    = explode("\n", trim($section));
+            $sectionName = trim($dataRows[0] ?? '');
+            if ($sectionName === '') {
+                continue;
             }
+            unset($dataRows[0]);
+            $manualData[$sectionName] = implode("\n", $dataRows);
         }
-        return $manual_data;
+        return $manualData;
     }
-
 }

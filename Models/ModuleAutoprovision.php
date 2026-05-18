@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /**
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
@@ -56,6 +58,33 @@ class ModuleAutoprovision extends ModulesModelsBase
      * @Column(type="string", nullable=true)
      */
     public $additional_params;
+
+    /**
+     * SIP secret used by the autoprovision peer.
+     * Generated at install time; never expose in templates or logs.
+     *
+     * @Column(type="string", nullable=true)
+     */
+    public $sip_secret;
+
+    /**
+     * TCP port for the module's dedicated HTTP listener.
+     * Served by a separate nginx server-block so phones bypass the global
+     * HTTPS redirect of the admin UI. Stored as string to match Phalcon's
+     * conventional column types for this module.
+     *
+     * @Column(type="string", nullable=true)
+     */
+    public $http_port;
+
+    /**
+     * Enables the pure-PHP TFTP server (UDP/69) for phones / firmware that
+     * prefer DHCP option 66 over multicast PnP. Stored as a Phalcon-style
+     * boolean column ('0'/'1' string) to match the rest of this model.
+     *
+     * @Column(type="string", nullable=true)
+     */
+    public $tftp_enabled;
 
     /**
      * Returns dynamic relations between module models and common models

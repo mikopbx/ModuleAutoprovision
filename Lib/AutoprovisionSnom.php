@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /**
  * Copyright (C) MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
@@ -47,6 +49,14 @@ class AutoprovisionSnom extends Autoprovision implements ConfManager
             $cfg .= '        <contact_source_sip_priority idx="INDEX" perm="PERMISSIONFLAG">PAI RPID FROM</contact_source_sip_priority>' . "\n";
         }
         $cfg .= "        <answer_after_policy perm=\"RW\">idle</answer_after_policy>\n";
+
+        // Snom firmware override — empty when no firmware row registered.
+        $firmwareUrl = (string)($req_data['firmware_url'] ?? '');
+        if ($firmwareUrl !== '') {
+            $cfg .= "        <firmware perm=\"RW\">"
+                . htmlspecialchars($firmwareUrl, ENT_XML1)
+                . "</firmware>\n";
+        }
 
         $cfg .= ($s['snom-phone-settings'] ?? '') . "\n";
         $cfg .= '    </phone-settings>' . "\n";

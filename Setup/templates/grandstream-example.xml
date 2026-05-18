@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- MikoPBX Autoprovision — Grandstream example template.
+     Placeholders {SIP_NUM}, {SIP_USER_NAME}, {SIP_PASS} substituted per device. -->
+<gs_provision version="1">
+    <config version="1">
+        <P271>1</P271>
+        <P270>MikoPBX ({SIP_NUM})</P270>
+        <P3>{SIP_USER_NAME}</P3>
+        <P47>pbx.example.local</P47>
+        <P63>5060</P63>
+        <P35>{SIP_NUM}</P35>
+        <P36>{SIP_NUM}</P36>
+        <P34>{SIP_PASS}</P34>
+        <P1359>0</P1359>
+        <!-- Uncomment after uploading firmware in the Firmware tab.
+             P192 = Firmware Server Path (URL phones poll for upgrades).
+             <P192>{FIRMWARE_URL}</P192> -->
+    </config>
+</gs_provision>

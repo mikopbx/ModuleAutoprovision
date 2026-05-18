@@ -2,6 +2,12 @@
  * Copyright © MIKO LLC - All Rights Reserved
  * Unauthorized copying of this file, via any medium is strictly prohibited
  * Proprietary and confidential
- * Written by Alexey Portnov, 11 2018
  */
 
+/* Rows queued for deletion: applied on first trash-bin click, cleared on second.
+   Actual delete happens server-side on Save (see saveAdditionalTables → __delete). */
+#module-autoprovision-form tr.marked-for-delete td {
+    background: #fff5f5;
+    color: #a33;
+    text-decoration: line-through;
+}
