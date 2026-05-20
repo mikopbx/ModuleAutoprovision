@@ -253,6 +253,86 @@ class Autoprovision extends Injectable
     }
 
     /**
+     * Resolves the host phones should reach the PBX on. Operator-supplied value in
+     * m_ModuleAutoprovision.pbx_host wins; if blank, falls back to the first
+     * non-loopback IPv4 of an up network interface so a fresh install works without
+     * the operator filling that field. Returns '' only when the PBX has no usable
+     * interface — at which point the broken NOTIFY URL is the least of the worries.
+     */
+    public static function resolvePbxHost(): string
+    {
+        $settings   = ModuleAutoprovision::findFirst();
+        $configured = $settings !== null ? trim((string)($settings->pbx_host ?? '')) : '';
+        if ($configured !== '') {
+            return $configured;
+        }
+        $net = new Network();
+        foreach ($net->getInterfacesNames() as $iface) {
+            $info = $net->getInterface($iface);
+            $ip   = trim((string)($info['ipaddr'] ?? ''));
+            if ($ip !== '' && $ip !== '127.0.0.1' && filter_var($ip, FILTER_VALIDATE_IP)) {
+                return $ip;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Looks up SIP credentials of the user mapped to $mac via m_TemplatesUsers
+     * and returns the substitution array (`{SIP_NUM}` etc.) ready for str_replace,
+     * or an empty array if no mapping exists. Extracted from renderTemplateConfig
+     * so the URI-template HTTP branch can reuse it for source-IP autodetection.
+     *
+     * @return array<string,string>
+     */
+    public static function lookupSipDataForMac(string $mac): array
+    {
+        $mac = strtolower(trim($mac));
+        if ($mac === '') {
+            return [];
+        }
+        $di = \Phalcon\Di\Di::getDefault();
+        if ($di === null) {
+            return [];
+        }
+        $manager = $di->get('modelsManager');
+
+        $mapping = $manager->createBuilder([
+            'models'     => ['TemplatesUsers' => TemplatesUsers::class],
+            'conditions' => ':mac: LIKE TemplatesUsers.mac',
+            'bind'       => ['mac' => $mac],
+            'columns'    => ['userId' => 'TemplatesUsers.userId'],
+            'limit'      => 1,
+        ])->getQuery()->execute()->toArray();
+        if (empty($mapping) || empty($mapping[0]['userId'])) {
+            return [];
+        }
+
+        $sipRow = $manager->createBuilder([
+            'models'     => ['Extensions' => Extensions::class],
+            'conditions' => ':userid: = Extensions.userid',
+            'bind'       => ['userid' => $mapping[0]['userId']],
+            'columns'    => [
+                '{SIP_USER_NAME}' => 'Extensions.callerid',
+                '{SIP_NUM}'       => 'Extensions.number',
+                '{SIP_PASS}'      => 'Sip.secret',
+            ],
+            'limit'      => 1,
+            'joins'      => [
+                'Extensions' => [Sip::class, 'Extensions.number = Sip.extension', 'Sip', 'LEFT'],
+            ],
+        ])->getQuery()->execute()->toArray();
+        if (empty($sipRow)) {
+            return [];
+        }
+        return [
+            '{SIP_USER_NAME}' => (string)($sipRow[0]['{SIP_USER_NAME}'] ?? ''),
+            '{SIP_NUM}'       => (string)($sipRow[0]['{SIP_NUM}'] ?? ''),
+            '{SIP_PASS}'      => (string)($sipRow[0]['{SIP_PASS}'] ?? ''),
+        ];
+    }
+
+    /**
      * Substitutes the generic ({PBX_HOST}, {FIRMWARE_URL}) and per-user ({SIP_*})
      * placeholders into a template body. Generic pass runs first so a template
      * authoring {FIRMWARE_URL} inside a {SIP_*} block still renders correctly.
@@ -265,10 +345,9 @@ class Autoprovision extends Injectable
         ?string $model,
         array $sipReplacements = []
     ): string {
-        $settings = ModuleAutoprovision::findFirst();
-        $generic  = [
+        $generic = [
             '{FIRMWARE_URL}' => FirmwareRepository::resolveFirmwareUrl($vendor, $model),
-            '{PBX_HOST}'     => $settings !== null ? (string)($settings->pbx_host ?? '') : '',
+            '{PBX_HOST}'     => self::resolvePbxHost(),
         ];
         $rendered = strtr($template, $generic);
         if (!empty($sipReplacements)) {

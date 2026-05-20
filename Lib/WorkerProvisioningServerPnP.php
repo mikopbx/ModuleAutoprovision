@@ -58,7 +58,10 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $this->interfaces  = $network->getInterfacesNames();
 
         // First-run safety: settings row may not exist yet (fresh install, mid-upgrade).
-        $pbxHost          = (string)($data->pbx_host ?? '');
+        // pbx_host falls back to the PBX's primary interface IP when the operator
+        // hasn't filled the field — otherwise the NOTIFY URL we ship to phones
+        // comes out as `http://:8480/...` and they silently discard it.
+        $pbxHost          = Autoprovision::resolvePbxHost();
         $macWhiteRaw      = (string)($data->mac_white ?? '');
         $macBlackRaw      = (string)($data->mac_black ?? '');
         $additionalParams = (string)($data->additional_params ?? '');
