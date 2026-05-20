@@ -94,46 +94,70 @@ class GetController extends ModulesControllerBase
             $this->terminateStreamedResponse();
         }
         $manager = $this->di->get('modelsManager');
-        $parameters = [
-            'models'     => [
-                'TemplatesUri' => TemplatesUri::class,
-            ],
-            'conditions' => ':uri: LIKE TemplatesUri.uri',
-            'bind' => [
-                'uri'  => $uri,
-            ],
-            'columns'    => [
-                'id'            => 'Templates.id',
-                'template'      => 'Templates.template',
-                'name'          => 'Templates.name',
-                'uri'           => 'TemplatesUri.uri',
-            ],
-            'order' => 'TemplatesUri.uri DESC',
-            'joins'      => [
-                'TemplatesUri' => [
-                    0 => Templates::class,
-                    1 => 'Templates.id = TemplatesUri.templateId',
-                    2 => 'Templates',
-                    3 => 'LEFT',
+        // TemplatesUri.uri is the LIKE pattern, $uri is the value — entries stored
+        // without a leading slash (the historical seeded form: `snom-D785.htm`)
+        // never matched the request URI Phalcon hands us (`/snom-D785.htm`).
+        // Try the request URI first, then with the leading slash stripped, so
+        // both stored forms work.
+        $uriCandidates = [$uri];
+        $stripped = ltrim($uri, '/');
+        if ($stripped !== '' && $stripped !== $uri) {
+            $uriCandidates[] = $stripped;
+        }
+        $result = [];
+        foreach ($uriCandidates as $candidate) {
+            $parameters = [
+                'models'     => [
+                    'TemplatesUri' => TemplatesUri::class,
                 ],
-            ],
-        ];
-        $result = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
+                'conditions' => ':uri: LIKE TemplatesUri.uri',
+                'bind'       => ['uri' => $candidate],
+                'columns'    => [
+                    'id'       => 'Templates.id',
+                    'template' => 'Templates.template',
+                    'name'     => 'Templates.name',
+                    'uri'      => 'TemplatesUri.uri',
+                ],
+                'order'      => 'TemplatesUri.uri DESC',
+                'joins'      => [
+                    'TemplatesUri' => [
+                        0 => Templates::class,
+                        1 => 'Templates.id = TemplatesUri.templateId',
+                        2 => 'Templates',
+                        3 => 'LEFT',
+                    ],
+                ],
+            ];
+            $result = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
+            if (!empty($result)) {
+                break;
+            }
+        }
         if(!empty($result)){
             // Substitute the vendor-agnostic placeholders before streaming the
             // template. The original code echoed the raw template body, which left
             // any `{FIRMWARE_URL}` / `{PBX_HOST}` token visible to the phone as a
             // literal string and broke firmware-URL emission for URIs that lived
-            // outside the per-MAC branch below. Per-user placeholders ({SIP_*}) are
-            // not in scope here — URI templates are shared across phones and we
-            // intentionally leave them literal so the operator notices when a
-            // sip-bearing template is wired to a URI route by mistake. We also log
-            // a warning when those tokens slip through so the situation is visible
-            // without staring at packet captures.
+            // outside the per-MAC branch below. For per-user placeholders ({SIP_*})
+            // we try to autodetect the phone via its source IP (matched against
+            // ModuleAutoprovisionDevice.host populated by PnP discovery) and
+            // substitute its SIP credentials. If nothing is found, the warning
+            // line is still logged so a misconfigured URI route remains visible.
             $template = (string)$result[0]['template'];
 
             $vendor   = $this->detectVendorFromUserAgent((string)$userAgent);
-            $rendered = Autoprovision::applyGenericPlaceholders($template, $vendor, null);
+            $sipData  = [];
+            $clientIp = (string)$this->request->getClientAddress(true);
+            if ($clientIp !== '' && filter_var($clientIp, FILTER_VALIDATE_IP)) {
+                $device = ModuleAutoprovisionDevice::findFirst([
+                    'host = :host:',
+                    'bind' => ['host' => $clientIp],
+                ]);
+                if ($device !== null && !empty($device->mac)) {
+                    $sipData = Autoprovision::lookupSipDataForMac((string)$device->mac);
+                }
+            }
+            $rendered = Autoprovision::applyGenericPlaceholders($template, $vendor, null, $sipData);
             if (preg_match('/\{SIP_(USER_NAME|NUM|PASS)\}/', $rendered) === 1) {
                 $this->logHttpRequest(
                     200,
@@ -154,9 +178,10 @@ class GetController extends ModulesControllerBase
             echo $rendered;
             $this->response->sendRaw();
             $this->logHttpRequest(200, [
-                'kind'     => 'uri-template',
-                'template' => $result[0]['name'] ?? '',
-                'bytes'    => strlen($rendered),
+                'kind'      => 'uri-template',
+                'template'  => $result[0]['name'] ?? '',
+                'bytes'     => strlen($rendered),
+                'sip_auto'  => empty($sipData) ? 'none' : ($clientIp ?: 'unknown'),
             ]);
             $this->terminateStreamedResponse();
         }
