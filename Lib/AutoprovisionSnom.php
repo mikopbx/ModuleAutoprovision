@@ -30,7 +30,7 @@ class AutoprovisionSnom extends Autoprovision implements ConfManager
         $settings = ModuleAutoprovision::findFirst();
         $s        = self::parseIniSettings($settings->additional_params);
 
-        $filename             = "{$this->tempDir}/{$req_data['mac']}.xml";
+        $filename             = $this->makeConfigFilename($req_data['mac'], 'xml');
         $voice_mail_extension = $this->mikoPBXConfig->getGeneralSettings('VoicemailExten');
 
         $cfg = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
