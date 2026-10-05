@@ -15,6 +15,7 @@ use MikoPBX\Core\System\Network;
 use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Modules\PbxExtensionUtils;
 use MikoPBX\PBXCoreREST\Controllers\Modules\ModulesControllerBase;
+use MikoPBX\PBXCoreREST\Lib\PbxExtensionsProcessor;
 use MikoPBX\Common\Library\Text;
 use Modules\ModuleAutoprovision\Lib\Autoprovision;
 use Modules\ModuleAutoprovision\Lib\Transliterate;
@@ -472,15 +473,39 @@ class GetController extends ModulesControllerBase
      */
     public function getConfig(): void
     {
-        $this->callActionForModule('ModuleAutoprovision', 'getProvisionConfig');
-        $this->response->sendRaw();
+        $this->streamModuleAction('getProvisionConfig');
     }
 
     /**
      */
     public function getImg(): void
     {
-        $this->callActionForModule('ModuleAutoprovision', 'getImgFile');
-        $this->response->sendRaw();
+        $this->streamModuleAction('getImgFile');
+    }
+
+    /**
+     * Runs a module action that answers with a file and lets BaseController stream it.
+     *
+     * callActionForModule() is not used: BaseController streams the core-format descriptor
+     * (data.fpassthru = [filename, content_type, need_delete]) and leaves the content empty, and
+     * cores without mikopbx/Core#1167 then pass json_decode('') = null to
+     * ModulesControllerBase::handleResponse(array) — a TypeError after the body (Sentry MIKOPBX-N6K).
+     * The payload is the one callActionForModule() builds.
+     */
+    private function streamModuleAction(string $action): void
+    {
+        $payload = $this->request->getData();
+        $payload['ip_srv'] = $_SERVER['SERVER_ADDR'];
+        $this->sendRequestToBackendWorker(
+            PbxExtensionsProcessor::class,
+            $action,
+            $payload,
+            'ModuleAutoprovision',
+            max(10, $this->request->getRequestTimeout())
+        );
+        // A file gone before streaming is answered with send() (404); a second send() throws.
+        if (!$this->response->isSent()) {
+            $this->response->sendRaw();
+        }
     }
 }
