@@ -42,15 +42,17 @@ class Autoprovision extends Injectable
      * The request that generated the file streams and deletes it, so parallel
      * requests for one MAC must not share a path (#23). Files of requests that
      * never streamed (client gone, worker answer after the timeout) are removed
-     * here once they are older than an hour.
+     * here once they are older than five minutes. Only the hex digits of the MAC
+     * reach the path.
      */
     protected function makeConfigFilename(string $mac, string $ext): string
     {
         foreach (glob("{$this->tempDir}/autoprov-cfg-*") ?: [] as $old) {
-            if (@filemtime($old) < time() - 3600) {
+            if (@filemtime($old) < time() - 300) {
                 @unlink($old);
             }
         }
+        $mac = preg_replace('/[^0-9A-Fa-f]/', '', $mac);
         return "{$this->tempDir}/autoprov-cfg-{$mac}-" . bin2hex(random_bytes(8)) . ".{$ext}";
     }
 
