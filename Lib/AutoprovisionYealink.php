@@ -28,7 +28,7 @@ class AutoprovisionYealink extends Autoprovision implements ConfManager
         $settings = ModuleAutoprovision::findFirst();
         $s        = self::parseIniSettings($settings->additional_params);
 
-        $filename = "{$this->tempDir}/{$req_data['mac']}.txt";
+        $filename = $this->makeConfigFilename($req_data['mac'], 'txt');
 
         $sip_port             = $this->mikoPBXConfig->getGeneralSettings('SIPPort');
         $web_port             = $this->mikoPBXConfig->getGeneralSettings('WEBPort');
