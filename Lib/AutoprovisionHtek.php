@@ -31,7 +31,7 @@ class AutoprovisionHtek extends Autoprovision implements ConfManager
         $settings = ModuleAutoprovision::findFirst();
         $s        = self::parseIniSettings($settings->additional_params);
 
-        $filename = "{$this->tempDir}/cfg{$req_data['mac']}.cfg";
+        $filename = $this->makeConfigFilename($req_data['mac'], 'cfg');
 
         $sipPort            = $this->mikoPBXConfig->getGeneralSettings('SIPPort');
         $voiceMailExtension = $this->mikoPBXConfig->getGeneralSettings('VoicemailExten');

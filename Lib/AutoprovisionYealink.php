@@ -28,10 +28,9 @@ class AutoprovisionYealink extends Autoprovision implements ConfManager
         $settings = ModuleAutoprovision::findFirst();
         $s        = self::parseIniSettings($settings->additional_params);
 
-        $filename = "{$this->tempDir}/{$req_data['mac']}.txt";
+        $filename = $this->makeConfigFilename($req_data['mac'], 'txt');
 
         $sip_port             = $this->mikoPBXConfig->getGeneralSettings('SIPPort');
-        $web_port             = $this->mikoPBXConfig->getGeneralSettings('WEBPort');
         $voice_mail_extension = $this->mikoPBXConfig->getGeneralSettings('VoicemailExten');
         $cfg                  = "#!version:1.0.0.1\r\n";
         foreach ($sip_peers as $line => $sip_peer) {
@@ -72,8 +71,8 @@ class AutoprovisionYealink extends Autoprovision implements ConfManager
         } elseif ($req_data['model'] === 't19d') {
             $cfg .= "phone_setting.lcd_logo.mode=0\r\n";
         } elseif ($req_data['model'] === 'sip-t28p') {
-            $path2img = '/pbxcore/api/modules/ModuleAutoprovision/getimg?file=logo-yealink-236x82.dob';
-            $cfg      .= "lcd_logo.url = http://{$req_data['ip_srv']}:{$web_port}{$path2img}\r\n";
+            $path2img = '/pbxcore/api/autoprovision/getimg?file=logo-yealink-236x82.dob';
+            $cfg      .= "lcd_logo.url = http://{$req_data['ip_srv']}:" . AutoprovisionConf::getHttpPort() . "{$path2img}\r\n";
             $cfg      .= "phone_setting.lcd_logo.mode = 2\r\n";
         } else {
             $cfg .= "phone_setting.lcd_logo.mode=0\r\n";

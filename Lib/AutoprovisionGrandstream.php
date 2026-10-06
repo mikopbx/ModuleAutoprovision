@@ -32,7 +32,7 @@ class AutoprovisionGrandstream extends Autoprovision implements ConfManager
         $settings = ModuleAutoprovision::findFirst();
         $s        = self::parseIniSettings($settings->additional_params);
 
-        $filename = "{$this->tempDir}/cfg{$req_data['mac']}.xml";
+        $filename = $this->makeConfigFilename($req_data['mac'], 'xml');
 
         $sipPort             = $this->mikoPBXConfig->getGeneralSettings('SIPPort');
         $voiceMailExtension  = $this->mikoPBXConfig->getGeneralSettings('VoicemailExten');

@@ -32,7 +32,7 @@ class AutoprovisionFanvil extends Autoprovision implements ConfManager
         $sip_peer = $sip_peers['1'];
 
 
-        $filename             = "{$this->tempDir}/{$req_data['mac']}.txt";
+        $filename             = $this->makeConfigFilename($req_data['mac'], 'txt');
         $sip_port             = $this->mikoPBXConfig->getGeneralSettings('SIPPort');
         $voice_mail_extension = $this->mikoPBXConfig->getGeneralSettings('VoicemailExten');
 
