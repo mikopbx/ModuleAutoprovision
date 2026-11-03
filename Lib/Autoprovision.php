@@ -105,6 +105,12 @@ class Autoprovision extends Injectable
         }
 
         if (empty($sipData)) {
+            // No legacy line mapping: use the MAC -> employee binding the web UI
+            // stores in TemplatesUsers (#19), otherwise the phone gets apv-miko.
+            $sipData = self::getTemplatesUsersSipData($mac);
+        }
+
+        if (empty($sipData)) {
             $defPeer = [
                 'extension' => AutoprovisionConf::SIP_USER,
                 'secret'    => AutoprovisionConf::getSipSecret(),
@@ -144,6 +150,43 @@ class Autoprovision extends Injectable
         }
 
         return $confManager->generateConfig($req_data, $sipData);
+    }
+
+    /**
+     * Returns line 1 SIP credentials of the employee bound to `$mac` in
+     * TemplatesUsers, or [] when there is no binding. `userId` refers to
+     * Extensions.userid, same as in renderTemplateConfig().
+     */
+    protected static function getTemplatesUsersSipData(string $mac): array
+    {
+        $binding = TemplatesUsers::findFirst([
+            ':mac: LIKE mac AND userId IS NOT NULL',
+            'bind' => ['mac' => strtolower($mac)],
+        ]);
+        if ($binding === null || (string)$binding->userId === '') {
+            return [];
+        }
+        $exten = Extensions::findFirst([
+            'userid = :userid: AND type = :type:',
+            'bind' => ['userid' => $binding->userId, 'type' => 'SIP'],
+        ]);
+        if ($exten === null) {
+            return [];
+        }
+        $sip = Sip::findFirst([
+            'extension = :extension:',
+            'bind' => ['extension' => $exten->number],
+        ]);
+        if ($sip === null) {
+            return [];
+        }
+        return [
+            '1' => [
+                'extension' => $sip->extension,
+                'secret'    => $sip->secret,
+                'callerid'  => $exten->callerid,
+            ],
+        ];
     }
 
     /**
