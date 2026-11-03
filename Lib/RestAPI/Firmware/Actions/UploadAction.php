@@ -25,7 +25,7 @@ use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionFirmware;
  *
  * Concurrency: the (compute total size → check cap → move into place → insert
  * DB row) sequence runs under flock(LOCK_EX) on Repository::lockFile() so two
- * parallel uploads can't both squeeze past the 300 MB cap. The lock is held
+ * parallel uploads can't both squeeze past the total repository cap. The lock is held
  * until the DB write completes — releasing earlier would re-open the race.
  */
 class UploadAction
@@ -111,7 +111,7 @@ class UploadAction
         if ($size > Repository::MAX_FILE_BYTES) {
             $res->httpCode            = 413;
             $res->messages['error'][] = sprintf(
-                'file too large: %d bytes (max %d / 80MB)',
+                'file too large: %d bytes (max %d)',
                 $size,
                 Repository::MAX_FILE_BYTES
             );

@@ -17,7 +17,7 @@ use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionFirmware;
 
 /**
  * Returns every firmware entry plus the totals row the admin UI needs to render
- * the "X MB of 300 MB used" footer without a separate round trip.
+ * the "X MB of Y MB used" footer without a separate round trip.
  */
 class GetListAction
 {

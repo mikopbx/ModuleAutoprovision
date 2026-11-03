@@ -18,6 +18,9 @@
 const moduleAutoprovisionFirmware = {
 	basePath: '/pbxcore/api/v3/module-autoprovision/firmware',
 
+	// Per-file cap, mirrors Repository::MAX_FILE_BYTES (server still enforces it).
+	maxFileBytes: 300 * 1024 * 1024,
+
 	$tab: null,
 	$tableBody: null,
 	$totals: null,
@@ -271,7 +274,7 @@ const moduleAutoprovisionFirmware = {
 			const config = FilesAPI.configureResumable({
 				target: `${Config.pbxUrl}/pbxcore/api/v3/files:upload`,
 				fileType: ['rom', 'bin', 'fw', 'z'],
-				maxFileSize: 80 * 1024 * 1024,
+				maxFileSize: moduleAutoprovisionFirmware.maxFileBytes,
 				query() {
 					return { category: 'autoprovision-firmware' };
 				},
@@ -367,8 +370,7 @@ const moduleAutoprovisionFirmware = {
 		const config = FilesAPI.configureResumable({
 			target: `${Config.pbxUrl}/pbxcore/api/v3/files:upload`,
 			fileType: ['rom', 'bin', 'fw', 'z'],
-			// 80 MB per file — server enforces, but we short-circuit on the client too.
-			maxFileSize: 80 * 1024 * 1024,
+			maxFileSize: moduleAutoprovisionFirmware.maxFileBytes,
 			query() {
 				return { category: 'autoprovision-firmware' };
 			},
@@ -446,8 +448,8 @@ const moduleAutoprovisionFirmware = {
 
 	/**
 	 * Polls Core's /files:uploadStatus until the chunk merge for the given file_id
-	 * reports UPLOAD_COMPLETE, then invokes `onReady`. A 60-iteration cap at ~1s
-	 * per poll covers the 80 MB ceiling (Core merges roughly 50 MB/sec on slow
+	 * reports UPLOAD_COMPLETE, then invokes `onReady`. A 180-iteration cap at ~1s
+	 * per poll covers the 300 MB ceiling (Core merges roughly 50 MB/sec on slow
 	 * USB-backed installs) while still giving up rather than spinning forever.
 	 *
 	 * On error or timeout we still invoke `onReady` so the user gets a clean
@@ -458,7 +460,7 @@ const moduleAutoprovisionFirmware = {
 			onReady();
 			return;
 		}
-		if (attempt > 60) {
+		if (attempt > 180) {
 			moduleAutoprovisionFirmware.setProgress(95, 'Merge taking too long — proceeding anyway');
 			onReady();
 			return;

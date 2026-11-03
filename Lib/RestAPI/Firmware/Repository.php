@@ -24,11 +24,11 @@ final class Repository
 {
     public const MODULE_UNIQUE_ID = 'ModuleAutoprovision';
 
-    /** 80 MB per file. */
-    public const MAX_FILE_BYTES = 80 * 1024 * 1024;
+    /** 300 MB per file (modern Grandstream GRP/GWN images exceed 100 MB). */
+    public const MAX_FILE_BYTES = 300 * 1024 * 1024;
 
-    /** 300 MB total across the whole repository. */
-    public const MAX_TOTAL_BYTES = 300 * 1024 * 1024;
+    /** 3 GB total across the whole repository. */
+    public const MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024;
 
     /** Vendor → allowed lowercase extensions (no leading dot). */
     public const VENDOR_EXTENSIONS = [
