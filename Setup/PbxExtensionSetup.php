@@ -29,7 +29,10 @@ use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Modules\Setup\PbxExtensionSetupBase;
 use Modules\ModuleAutoprovision\Lib\TemplateSeeder;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
+use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
+use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionUsers;
 use Modules\ModuleAutoprovision\Models\Templates;
+use Modules\ModuleAutoprovision\Models\TemplatesUsers;
 use Throwable;
 
 class PbxExtensionSetup extends PbxExtensionSetupBase
@@ -100,7 +103,67 @@ class PbxExtensionSetup extends PbxExtensionSetupBase
             return false;
         }
 
+        $this->migrateLegacyBindings();
+
         return $this->registerNewModule();
+    }
+
+    /**
+     * Copies MAC -> employee bindings from the legacy tables into TemplatesUsers.
+     *
+     * The settings page lists only TemplatesUsers, so phones bound in older
+     * versions (m_ModuleAutoprovisionDevice + m_ModuleAutoprovisionUsers) were
+     * invisible after an upgrade (#16). One row per MAC, taken from the lowest
+     * line; the template is left empty for the admin to choose. MACs that
+     * already have a TemplatesUsers row are skipped, so reruns are no-ops.
+     * Failures are logged and never block the install.
+     */
+    private function migrateLegacyBindings(): void
+    {
+        try {
+            $existing = [];
+            foreach (TemplatesUsers::find(['columns' => 'mac'])->toArray() as $row) {
+                $existing[strtolower((string)$row['mac'])] = true;
+            }
+
+            // Lowest line per device wins.
+            $userByDevice = [];
+            foreach (ModuleAutoprovisionUsers::find(['order' => 'id_phone, line'])->toArray() as $row) {
+                if (empty($row['userid']) || isset($userByDevice[$row['id_phone']])) {
+                    continue;
+                }
+                $userByDevice[$row['id_phone']] = (string)$row['userid'];
+            }
+            if ($userByDevice === []) {
+                return;
+            }
+
+            $migrated = 0;
+            foreach (ModuleAutoprovisionDevice::find()->toArray() as $device) {
+                $mac = strtolower((string)$device['mac']);
+                if ($mac === '' || isset($existing[$mac]) || !isset($userByDevice[$device['id']])) {
+                    continue;
+                }
+                $binding             = new TemplatesUsers();
+                $binding->mac        = $mac;
+                $binding->userId     = $userByDevice[$device['id']];
+                $binding->templateId = '';
+                if ($binding->save()) {
+                    $existing[$mac] = true;
+                    $migrated++;
+                } else {
+                    SystemMessages::sysLogMsg(
+                        self::LOG_TAG,
+                        "Failed to migrate binding for MAC $mac: " . implode(', ', $binding->getMessages())
+                    );
+                }
+            }
+            if ($migrated > 0) {
+                SystemMessages::sysLogMsg(self::LOG_TAG, "Migrated $migrated legacy phone bindings to TemplatesUsers", LOG_NOTICE);
+            }
+        } catch (Throwable $e) {
+            SystemMessages::sysLogMsg(self::LOG_TAG, 'Legacy binding migration failed: ' . $e->getMessage());
+        }
     }
 
     /**
