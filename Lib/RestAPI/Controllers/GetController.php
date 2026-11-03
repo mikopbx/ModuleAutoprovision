@@ -323,7 +323,8 @@ class GetController extends ModulesControllerBase
 
         $this->response->setHeader('Content-Description', "config file");
         $this->response->setHeader('Content-Disposition', "attachment; filename=".basename($uri).'.xml');
-        $this->response->setHeader('Content-type', "text/plain");
+        $this->response->setHeader('Content-type', "text/xml; charset=UTF-8");
+        $this->response->setHeader('Content-Length', (string)strlen($phoneBook));
         $this->response->setHeader('Content-Transfer-Encoding', "binary");
         $this->response->sendHeaders();
         echo $phoneBook;
@@ -392,8 +393,10 @@ class GetController extends ModulesControllerBase
             ];
             $groupsData = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
             foreach ($groupsData as $group){
-                $bookUsers[$group['user_id']] = $this->camelize($group['name']);
-                $tmpPhoneBookArray[$group['name']] = '';
+                // Same key for both arrays, it becomes the XML tag name.
+                $bookName = $this->camelize($group['name']);
+                $bookUsers[$group['user_id']] = $bookName;
+                $tmpPhoneBookArray[$bookName] = '';
             }
         }
 
@@ -407,6 +410,7 @@ class GetController extends ModulesControllerBase
                 'number'   => 'Extensions.number',
                 'callerid' => 'Extensions.callerid',
                 'username' => 'Users.username',
+                'userid'   => 'Extensions.userid',
             ],
             'joins'      => [
                 'Extensions' => [
@@ -421,9 +425,11 @@ class GetController extends ModulesControllerBase
         // $users    = Extensions::find(["type = 'SIP'", 'columns' => ['number', 'callerid', 'userid']])->toArray();
         foreach ($users as $userData) {
             $book = $bookUsers[$userData['userid']]??$nameBook;
+            $name   = htmlspecialchars((string)$userData['username'], ENT_XML1);
+            $number = htmlspecialchars((string)$userData['number'], ENT_XML1);
             $tmpPhoneBookArray[$book].= "\t".'<DirectoryEntry>'.PHP_EOL;
-            $tmpPhoneBookArray[$book].= "\t\t"."<Name>{$userData['username']}</Name>".PHP_EOL;
-            $tmpPhoneBookArray[$book].= "\t\t"."<Telephone>{$userData['number']}</Telephone>".PHP_EOL;
+            $tmpPhoneBookArray[$book].= "\t\t"."<Name>{$name}</Name>".PHP_EOL;
+            $tmpPhoneBookArray[$book].= "\t\t"."<Telephone>{$number}</Telephone>".PHP_EOL;
             $tmpPhoneBookArray[$book].= "\t".'</DirectoryEntry>'.PHP_EOL;
         }
         foreach ($tmpPhoneBookArray as $key => $value){
@@ -431,12 +437,16 @@ class GetController extends ModulesControllerBase
                 continue;
             }
             $phoneBook.= "<{$key}IPPhoneDirectory>".PHP_EOL;
+            // Older Yealink models (T20P, T21P_E2) drop the book without <Title>.
+            $phoneBook.= "\t<Title>".htmlspecialchars((string)$key, ENT_XML1)."</Title>".PHP_EOL;
             $phoneBook.= $value;
             $phoneBook.= "</{$key}IPPhoneDirectory>".PHP_EOL;
         }
         $this->response->setHeader('Content-Description', "config file");
         $this->response->setHeader('Content-Disposition', "attachment; filename=".basename($uri).'.xml');
-        $this->response->setHeader('Content-type', "text/plain");
+        // Yealink rejects text/plain and chunked transfer (ret=23), see #19.
+        $this->response->setHeader('Content-type', "text/xml; charset=UTF-8");
+        $this->response->setHeader('Content-Length', (string)strlen($phoneBook));
         $this->response->setHeader('Content-Transfer-Encoding', "binary");
         $this->response->sendHeaders();
         echo $phoneBook;

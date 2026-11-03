@@ -438,6 +438,9 @@ class AutoprovisionConf extends ConfigClass
 
     location = /pbxcore/index.php {
         internal;
+        # Requests land here after the rewrites above. gzip drops Content-Length
+        # and switches to chunked, which Yealink rejects for the phonebook (#19).
+        gzip off;
         fastcgi_pass unix:/var/run/php-fpm.sock;
         fastcgi_index index.php;
         include fastcgi_params;
