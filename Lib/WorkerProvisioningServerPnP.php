@@ -468,8 +468,24 @@ class WorkerProvisioningServerPnP extends WorkerBase
         // В перовй строке смотрим имя SIP сообещния и MAC адрес телефона.
         $headers['method'] = $method;
 
-        $pos_start      = strpos($rows[0], '@') - 12;
-        $headers['mac'] = strtolower(substr($rows[0], $pos_start, 12));
+        $atPos = strpos($rows[0], '@');
+        if ($atPos === false || $atPos < 12) {
+            if ($this->verbose_syslog) {
+                SystemMessages::sysLogMsg(self::LOG_TAG, 'rejecting SUBSCRIBE: no MAC in request line', LOG_NOTICE);
+            }
+            return [];
+        }
+        $headers['mac'] = strtolower(substr($rows[0], $atPos - 12, 12));
+
+        // The MAC is used as a file name and stored in the DB, so accept hex only.
+        if (preg_match('/^[0-9a-f]{12}$/', $headers['mac']) !== 1) {
+            SystemMessages::sysLogMsg(
+                self::LOG_TAG,
+                'rejecting SUBSCRIBE: invalid MAC ' . json_encode($headers['mac']),
+                LOG_NOTICE
+            );
+            return [];
+        }
 
         if (count($this->mac_white) > 0 && ! in_array($headers['mac'], $this->mac_white, true)) {
             // Если есть белый список, то черный не используем.
@@ -554,7 +570,9 @@ class WorkerProvisioningServerPnP extends WorkerBase
             }catch (\Exception $e){
                 $data = [];
             }
-            file_put_contents($this->requests_dir . '/' . $headers['mac'], $data);
+            if ($this->requests_dir !== '') {
+                file_put_contents($this->requests_dir . '/' . $headers['mac'], $data);
+            }
         }
 
         if ( ! empty($headers['mac']) && ! empty($headers['phone_ip'])) {
