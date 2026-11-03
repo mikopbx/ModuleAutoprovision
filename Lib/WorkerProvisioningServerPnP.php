@@ -479,11 +479,14 @@ class WorkerProvisioningServerPnP extends WorkerBase
 
         // The MAC is used as a file name and stored in the DB, so accept hex only.
         if (preg_match('/^[0-9a-f]{12}$/', $headers['mac']) !== 1) {
-            SystemMessages::sysLogMsg(
-                self::LOG_TAG,
-                'rejecting SUBSCRIBE: invalid MAC ' . json_encode($headers['mac']),
-                LOG_NOTICE
-            );
+            // BLF/MWI SUBSCRIBEs to Asterisk land here too, so log only in verbose mode.
+            if ($this->verbose_syslog) {
+                SystemMessages::sysLogMsg(
+                    self::LOG_TAG,
+                    'rejecting SUBSCRIBE: invalid MAC ' . json_encode($headers['mac']),
+                    LOG_NOTICE
+                );
+            }
             return [];
         }
 
