@@ -234,7 +234,20 @@ var moduleAutoprovision = {
             oldId = _ref5[0],
             newId = _ref5[1];
 
+        // The server maps every saved row, existing ones to themselves.
+        // Rebuilding those rows would reset their textareas (#18).
+        if (String(oldId) === String(newId)) {
+          return;
+        }
+
         var $syncTr = $("#".concat(table, " tr#").concat(oldId));
+        // .html() serializes default values, so copy the current ones first.
+        $syncTr.find('textarea').each(function syncText() {
+          $(this).text($(this).val());
+        });
+        $syncTr.find('input').each(function syncInput() {
+          $(this).attr('value', $(this).val());
+        });
         var html = $syncTr.html();
 
         if (html) {

@@ -196,7 +196,19 @@ const moduleAutoprovision = {
 		// Re-bind freshly inserted rows from mock ids to real database ids.
 		Object.entries(response.resultSaveTables || {}).forEach(([table, mapping]) => {
 			Object.entries(mapping).forEach(([oldId, newId]) => {
+				// The server maps every saved row, existing ones to themselves.
+				// Rebuilding those rows would reset their textareas (#18).
+				if (String(oldId) === String(newId)) {
+					return;
+				}
 				const $syncTr = $(`#${table} tr#${oldId}`);
+				// .html() serializes default values, so copy the current ones first.
+				$syncTr.find('textarea').each(function syncText() {
+					$(this).text($(this).val());
+				});
+				$syncTr.find('input').each(function syncInput() {
+					$(this).attr('value', $(this).val());
+				});
 				const html = $syncTr.html();
 				if (html) {
 					$syncTr.html(html.replace(new RegExp(oldId, 'g'), newId));
