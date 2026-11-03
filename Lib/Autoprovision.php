@@ -159,16 +159,13 @@ class Autoprovision extends Injectable
      */
     protected static function getTemplatesUsersSipData(string $mac): array
     {
-        $binding = TemplatesUsers::findFirst([
-            ':mac: LIKE mac AND userId IS NOT NULL',
-            'bind' => ['mac' => strtolower($mac)],
-        ]);
-        if ($binding === null || (string)$binding->userId === '') {
+        $userId = self::findUserIdByMac($mac);
+        if ($userId === '') {
             return [];
         }
         $exten = Extensions::findFirst([
             'userid = :userid: AND type = :type:',
-            'bind' => ['userid' => $binding->userId, 'type' => 'SIP'],
+            'bind' => ['userid' => $userId, 'type' => 'SIP'],
         ]);
         if ($exten === null) {
             return [];
@@ -190,6 +187,52 @@ class Autoprovision extends Injectable
     }
 
     /**
+     * Finds the `TemplatesUsers.userId` that should serve `$mac`, or '' when
+     * the MAC has no filled binding.
+     *
+     * Several rows can match one MAC: the PnP worker autocreates an exact-MAC
+     * row with empty userId/templateId, while operators may also add LIKE
+     * patterns (e.g. `aabbcc%`) bound to an employee. Selection rules:
+     *   1. rows with an empty userId never win (placeholders must not shadow
+     *      a filled binding);
+     *   2. an exact MAC match beats every pattern;
+     *   3. otherwise the longest (most specific) pattern wins.
+     */
+    protected static function findUserIdByMac(string $mac): string
+    {
+        $mac = strtolower(trim($mac));
+        if ($mac === '') {
+            return '';
+        }
+        $di = \Phalcon\Di\Di::getDefault();
+        if ($di === null) {
+            return '';
+        }
+        $rows = $di->get('modelsManager')->createBuilder([
+            'models'     => ['TemplatesUsers' => TemplatesUsers::class],
+            'conditions' => ':mac: LIKE TemplatesUsers.mac',
+            'bind'       => ['mac' => $mac],
+            'columns'    => ['mac' => 'TemplatesUsers.mac', 'userId' => 'TemplatesUsers.userId'],
+            'order'      => 'LENGTH(TemplatesUsers.mac) DESC',
+        ])->getQuery()->execute()->toArray();
+
+        $firstFilled = '';
+        foreach ($rows as $row) {
+            $userId = trim((string)($row['userId'] ?? ''));
+            if ($userId === '') {
+                continue;
+            }
+            if (strcasecmp((string)($row['mac'] ?? ''), $mac) === 0) {
+                return $userId;
+            }
+            if ($firstFilled === '') {
+                $firstFilled = $userId;
+            }
+        }
+        return $firstFilled;
+    }
+
+    /**
      * Renders the per-MAC `TemplatesUsers`-bound config for `$mac` and returns
      * the body as a string, or null when no template is mapped to the MAC.
      *
@@ -198,6 +241,11 @@ class Autoprovision extends Injectable
      * produce byte-identical output for the same MAC. The legacy
      * `generateConfigPhone()` multi-account flow remains the fallback when no
      * mapping exists.
+     *
+     * Row selection mirrors findUserIdByMac(): rows whose rendered template is
+     * empty (PnP-autocreated placeholders, dangling templateId references)
+     * never shadow a filled binding; an exact MAC match wins over LIKE
+     * patterns, longer patterns win over shorter ones.
      *
      * Placeholder pipeline (order matters):
      *   1. `{PBX_HOST}` / `{FIRMWARE_URL}` — generic, evaluated once.
@@ -224,10 +272,11 @@ class Autoprovision extends Injectable
             'bind'       => ['mac' => $mac],
             'columns'    => [
                 'id'       => 'TemplatesUsers.id',
+                'mac'      => 'TemplatesUsers.mac',
                 'template' => 'Templates.template',
                 'userId'   => 'TemplatesUsers.userId',
             ],
-            'limit'      => 1,
+            'order'      => 'LENGTH(TemplatesUsers.mac) DESC',
             'joins'      => [
                 'TemplatesUsers' => [
                     0 => Templates::class,
@@ -237,11 +286,26 @@ class Autoprovision extends Injectable
                 ],
             ],
         ];
-        $row = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
-        if (empty($row)) {
+        $rows = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
+        $row  = null;
+        foreach ($rows as $candidate) {
+            if ((string)($candidate['template'] ?? '') === '') {
+                continue;
+            }
+            if (strcasecmp((string)($candidate['mac'] ?? ''), $mac) === 0) {
+                $row = $candidate;
+                break;
+            }
+            // Rows arrive longest-pattern-first; keep only the first filled
+            // pattern as the fallback — later ones are less specific.
+            if ($row === null) {
+                $row = $candidate;
+            }
+        }
+        if ($row === null) {
             return null;
         }
-        $template = (string)($row[0]['template'] ?? '');
+        $template = (string)($row['template'] ?? '');
         if ($template === '') {
             return null;
         }
@@ -253,7 +317,7 @@ class Autoprovision extends Injectable
                 'Extensions' => Extensions::class,
             ],
             'conditions' => ':userid: = Extensions.userid',
-            'bind'       => ['userid' => $row[0]['userId']],
+            'bind'       => ['userid' => $row['userId']],
             'columns'    => [
                 '{SIP_USER_NAME}' => 'Extensions.callerid',
                 '{SIP_NUM}'       => 'Extensions.number',
@@ -350,8 +414,8 @@ class Autoprovision extends Injectable
      */
     public static function lookupSipDataForMac(string $mac): array
     {
-        $mac = strtolower(trim($mac));
-        if ($mac === '') {
+        $userId = self::findUserIdByMac($mac);
+        if ($userId === '') {
             return [];
         }
         $di = \Phalcon\Di\Di::getDefault();
@@ -360,21 +424,10 @@ class Autoprovision extends Injectable
         }
         $manager = $di->get('modelsManager');
 
-        $mapping = $manager->createBuilder([
-            'models'     => ['TemplatesUsers' => TemplatesUsers::class],
-            'conditions' => ':mac: LIKE TemplatesUsers.mac',
-            'bind'       => ['mac' => $mac],
-            'columns'    => ['userId' => 'TemplatesUsers.userId'],
-            'limit'      => 1,
-        ])->getQuery()->execute()->toArray();
-        if (empty($mapping) || empty($mapping[0]['userId'])) {
-            return [];
-        }
-
         $sipRow = $manager->createBuilder([
             'models'     => ['Extensions' => Extensions::class],
             'conditions' => ':userid: = Extensions.userid',
-            'bind'       => ['userid' => $mapping[0]['userId']],
+            'bind'       => ['userid' => $userId],
             'columns'    => [
                 '{SIP_USER_NAME}' => 'Extensions.callerid',
                 '{SIP_NUM}'       => 'Extensions.number',

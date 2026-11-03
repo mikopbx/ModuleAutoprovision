@@ -24,6 +24,7 @@ use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Core\Workers\WorkerBase;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
+use Modules\ModuleAutoprovision\Models\TemplatesUsers;
 
 class WorkerProvisioningServerPnP extends WorkerBase
 {
@@ -579,7 +580,34 @@ class WorkerProvisioningServerPnP extends WorkerBase
         }
 
         if ( ! empty($headers['mac']) && ! empty($headers['phone_ip'])) {
-            /** @var ModuleAutoprovisionDevice $res */
+            $this->registerDiscoveredDevice($headers);
+        }
+
+        return $headers;
+    }
+
+    /**
+     * Persists the discovered device and makes it manageable from the settings page.
+     *
+     * host/port/model are refreshed on every sighting: the same-IP cleanup at the
+     * top of this method wipes host first, and the old "update only when port
+     * changed" guard left the
+     * row with an empty host whenever the phone kept its port — which also broke
+     * the later check-sync NOTIFY that targets ModuleAutoprovisionDevice.host.
+     *
+     * A TemplatesUsers row with empty userId/templateId is created on the first
+     * sighting so the phone shows up in the "Phone settings" tab by itself.
+     * SQLite's LIKE is case-insensitive, so an admin-entered row in any case
+     * variant counts as existing and no duplicate is created.
+     *
+     * All failures are logged and swallowed — the 200 OK and the NOTIFY with the
+     * provisioning URL must reach the phone regardless of the database state.
+     *
+     * @param array $headers Parsed SUBSCRIBE headers (mac, phone_ip, phone_port, Event).
+     */
+    private function registerDiscoveredDevice(array $headers): void
+    {
+        try {
             /** @var ModuleAutoprovisionDevice $devise */
             $devises = ModuleAutoprovisionDevice::find([
                 'host = :host:',
@@ -590,27 +618,50 @@ class WorkerProvisioningServerPnP extends WorkerBase
                 $devise->save();
             }
 
+            /** @var ModuleAutoprovisionDevice|null $res */
             $res = ModuleAutoprovisionDevice::findFirst([
                 'mac = :mac:',
                 'bind' => ['mac' => $headers['mac']],
             ]);
             if ($res === null) {
-                $res                     = new ModuleAutoprovisionDevice();
-                $res->mac                = $headers['mac'];
-                $res->port               = $headers['phone_port'];
-                $res->host               = $headers['phone_ip'];
-                $res->manufacturer_model = $headers['Event']['vendor'] . ' / ' . $headers['Event']['model'];
-                $res->save();
-            } elseif ($res->mac !== $headers['mac'] || $res->port !== $headers['phone_port']) {
-                $res->mac                = $headers['mac'];
-                $res->port               = $headers['phone_port'];
-                $res->host               = $headers['phone_ip'];
-                $res->manufacturer_model = $headers['Event']['vendor'] . ' / ' . $headers['Event']['model'];
-                $res->save();
+                $res = new ModuleAutoprovisionDevice();
             }
-        }
+            $res->mac                = $headers['mac'];
+            $res->port               = $headers['phone_port'];
+            $res->host               = $headers['phone_ip'];
+            $res->manufacturer_model = $headers['Event']['vendor'] . ' / ' . $headers['Event']['model'];
+            if ($res->save() === false) {
+                SystemMessages::sysLogMsg(
+                    self::LOG_TAG,
+                    'Failed to save device ' . $headers['mac'] . ': ' . implode(', ', $res->getMessages()),
+                    LOG_ERR
+                );
+            }
 
-        return $headers;
+            $binding = TemplatesUsers::findFirst([
+                'mac LIKE :mac:',
+                'bind' => ['mac' => $headers['mac']],
+            ]);
+            if ($binding === null) {
+                $binding             = new TemplatesUsers();
+                $binding->mac        = $headers['mac'];
+                $binding->userId     = '';
+                $binding->templateId = '';
+                if ($binding->save() === false) {
+                    SystemMessages::sysLogMsg(
+                        self::LOG_TAG,
+                        'Failed to create a binding row for ' . $headers['mac'] . ': ' . implode(', ', $binding->getMessages()),
+                        LOG_ERR
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            SystemMessages::sysLogMsg(
+                self::LOG_TAG,
+                'Device registration failed for ' . $headers['mac'] . ': ' . $e->getMessage(),
+                LOG_ERR
+            );
+        }
     }
 
     /**
