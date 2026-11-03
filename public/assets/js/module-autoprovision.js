@@ -266,10 +266,19 @@ var moduleAutoprovision = {
       };
     }).get();
     $('td[data-label="template"] div.scrolling.menu').each(function rebuild() {
-      var $menu = $(this).empty();
+      var $menu = $(this).empty(); // Keep a genuinely empty blank option: the placeholder row id must never
+      // leak into phone_settings.templateId as a saved value.
+
+      var emptyLabel = $(this).closest('div.dropdown').data('empty-item-label') || '';
+      $menu.append($('<div>').attr('data-value', '').attr('class', 'item').text(emptyLabel));
       templates.forEach(function (_ref6) {
         var id = _ref6.id,
             name = _ref6.name;
+
+        if (id === 'emptyTemplateRow') {
+          return;
+        }
+
         $menu.append($('<div>').attr('data-value', id).attr('class', 'item').text(name));
       });
     });

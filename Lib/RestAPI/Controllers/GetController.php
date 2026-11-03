@@ -506,6 +506,10 @@ class GetController extends ModulesControllerBase
     {
         $payload = $this->request->getData();
         $payload['ip_srv'] = $_SERVER['SERVER_ADDR'];
+        // The backend worker only receives this payload, not the HTTP headers —
+        // yet getProvisionConfig needs the phone's User-Agent to resolve
+        // {FIRMWARE_URL} the same way the per-MAC HTTP endpoint does.
+        $payload['user_agent'] = (string)$this->request->getHeader('User-Agent');
         $this->sendRequestToBackendWorker(
             PbxExtensionsProcessor::class,
             $action,

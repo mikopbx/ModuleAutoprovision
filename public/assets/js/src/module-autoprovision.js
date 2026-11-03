@@ -227,7 +227,14 @@ const moduleAutoprovision = {
 		}).get();
 		$('td[data-label="template"] div.scrolling.menu').each(function rebuild() {
 			const $menu = $(this).empty();
+			// Keep a genuinely empty blank option: the placeholder row id must never
+			// leak into phone_settings.templateId as a saved value.
+			const emptyLabel = $(this).closest('div.dropdown').data('empty-item-label') || '';
+			$menu.append($('<div>').attr('data-value', '').attr('class', 'item').text(emptyLabel));
 			templates.forEach(({ id, name }) => {
+				if (id === 'emptyTemplateRow') {
+					return;
+				}
 				$menu.append($('<div>').attr('data-value', id).attr('class', 'item').text(name));
 			});
 		});

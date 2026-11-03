@@ -180,7 +180,7 @@
                 <div class="ui fluid mini icon input"><input type="text"  name="phone_settings[{{ template['id']|e }}][mac]" placeholder="" value="{{ template['mac']|default('')|e }}"></div>
             </td>
             <td data-label="template" data-id="{{ template['id']|e }}">
-                <div class="ui dropdown">
+                <div class="ui dropdown" data-empty-item-label="{{ t._('mod_Autoprovision_filter_posts') }}">
                   <input type="hidden" name="phone_settings[{{ template['id']|e }}][templateId]" value="{{ template['templateId']|default('')|e }}">
                   <i class="file alternate icon"></i>
                   <span class="text">{{ t._('mod_Autoprovision_filter_posts') }}</span>
@@ -191,8 +191,13 @@
                     </div>
                     <div class="divider"></div>
                     <div class="scrolling menu">
+                      {# The blank option must carry an empty data-value — the placeholder row
+                         id previously leaked into phone_settings.templateId as "emptyTemplateRow". #}
+                      <div class="item" data-value="">{{ t._('mod_Autoprovision_filter_posts') }}</div>
                       {% for pattern in templates %}
+                      {% if pattern['id'] != 'emptyTemplateRow' %}
                       <div class="item" data-value="{{ pattern['id']|e }}">{{ pattern['name']|default('')|e }}</div>
+                      {% endif %}
                       {% endfor %}
                     </div>
                   </div>

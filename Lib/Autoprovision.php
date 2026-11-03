@@ -57,7 +57,13 @@ class Autoprovision extends Injectable
     }
 
     /**
-     * Generates the vendor-specific provisioning config file for the phone identified by $req_data['mac'].
+     * Generates the provisioning config file for the phone identified by $req_data['mac'].
+     *
+     * Configuration priority: an explicitly assigned template (TemplatesUsers
+     * row with a non-empty templateId) wins and renders the exact body the
+     * per-MAC HTTP endpoint serves; without one the vendor generators take
+     * over with legacy ModuleAutoprovisionUsers line mappings, then the
+     * TemplatesUsers fallback, then the shared `apv-miko-pbx` account.
      *
      * @param array $req_data Provisioning request payload (must include 'mac' and 'vendor').
      * @return string Absolute path to the generated config, or '' if the phone is unknown.
@@ -67,6 +73,22 @@ class Autoprovision extends Injectable
         $mac = (string)($req_data['mac'] ?? '');
         if ($mac === '') {
             return '';
+        }
+
+        // Assigned template branch: same renderer as the per-MAC HTTP endpoint
+        // (GetController::getConfigStatic), so both channels return a
+        // byte-identical body for the same MAC.
+        $templateBody = self::renderTemplateConfig(
+            $mac,
+            (string)($req_data['user_agent'] ?? ''),
+            isset($req_data['vendor']) ? (string)$req_data['vendor'] : null
+        );
+        if ($templateBody !== null) {
+            $filename = $this->makeConfigFilename($mac, 'cfg');
+            if (@file_put_contents($filename, $templateBody) === false) {
+                return '';
+            }
+            return $filename;
         }
 
         $phoneData = ModuleAutoprovisionDevice::findFirst([

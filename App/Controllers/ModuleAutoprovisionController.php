@@ -267,6 +267,11 @@ class ModuleAutoprovisionController extends BaseController
                     if ($column === '__delete') {
                         continue;
                     }
+                    // The dropdown blank option used to submit the placeholder row id
+                    // ("emptyTemplateRow"); normalise it so the sentinel never lands in a column.
+                    if ($value === 'emptyTemplateRow') {
+                        $value = '';
+                    }
                     $dbRow->{$column} = $value;
                 }
                 if ($dbRow->save()) {
