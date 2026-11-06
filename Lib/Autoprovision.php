@@ -11,6 +11,7 @@ declare(strict_types=1);
 namespace Modules\ModuleAutoprovision\Lib;
 
 use MikoPBX\Common\Models\Extensions;
+use MikoPBX\Common\Models\LanInterfaces;
 use MikoPBX\Common\Models\Sip;
 use MikoPBX\Core\Asterisk\AGI;
 use MikoPBX\Core\System\MikoPBXConfig;
@@ -534,6 +535,53 @@ class Autoprovision extends Injectable
         }
         $tail = trim(implode(' ', $parts));
         return $tail === '' ? null : $tail;
+    }
+
+    /**
+     * Returns the LAN interface whose subnet contains $host (longest prefix
+     * wins), or '' when no interface can reach the phone directly.
+     *
+     * Used to pick the source address for the check-sync NOTIFY sent after a
+     * settings save — the AGI flow gets the interface from ARP, which is not
+     * available from the web request that triggers the reboot here.
+     */
+    public static function findEgressInterface(string $host): string
+    {
+        if (!filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            return '';
+        }
+        static $subnets = null;
+        if ($subnets === null) {
+            $subnets = [];
+            $net = new Network();
+            $names = $net->getInterfacesNames();
+            // On bare metal getInterfacesNames() skips virtual NICs, which drops
+            // the kernel-created vlanN interfaces — phones in a voice VLAN would
+            // look unreachable. Append the VLANs configured in the PBX settings.
+            foreach (LanInterfaces::find(['conditions' => 'vlanid > 0', 'columns' => 'vlanid']) as $vlanRow) {
+                $names[] = 'vlan' . $vlanRow->vlanid;
+            }
+            foreach (array_unique($names) as $iface) {
+                $info = $net->getInterface($iface);
+                $ip   = (string)($info['ipaddr'] ?? '');
+                $cidr = (int)($info['subnet'] ?? 0);
+                if ($ip !== '' && $cidr > 0
+                    && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                    $subnets[$iface] = [(int)ip2long($ip), $cidr];
+                }
+            }
+        }
+        $hostLong = (int)ip2long($host);
+        $bestIface = '';
+        $bestLen   = -1;
+        foreach ($subnets as $iface => [$ipLong, $cidr]) {
+            $mask = (0xFFFFFFFF << (32 - $cidr)) & 0xFFFFFFFF;
+            if (($hostLong & $mask) === ($ipLong & $mask) && $cidr > $bestLen) {
+                $bestIface = $iface;
+                $bestLen   = $cidr;
+            }
+        }
+        return $bestIface;
     }
 
     /**

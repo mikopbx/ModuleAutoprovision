@@ -8,7 +8,7 @@ SIP1 Enable Reg    :1
 SIP1 Phone Number  :{SIP_NUM}
 SIP1 Display Name  :{SIP_USER_NAME}
 SIP1 Sip Name      :{SIP_NUM}
-SIP1 Register Addr :pbx.example.local
+SIP1 Register Addr :{PBX_HOST}
 SIP1 Register Port :5060
 SIP1 Register User :{SIP_NUM}
 SIP1 Register Pswd :{SIP_PASS}

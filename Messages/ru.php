@@ -54,6 +54,7 @@ return [
     'mod_Autoprovision_templates_uri_template'   => 'Шаблон',
     'mod_Autoprovision_phone_settings_user' => 'Сотрудник',
     'mod_Autoprovision_phone_settings_mac'  => 'MAC Адрес',
+    'mod_Autoprovision_reboot_unavailable'  => 'Конфиг сохранён; перезагрузка недоступна для телефонов: %macs%. Конфигурация применится при следующем обновлении',
     'mod_Autoprovision_template_name'  => 'Наименование',
     'mod_Autoprovision_search_tags'  => 'Поиск...',
     'mod_Autoprovision_filter_posts'  => '',

@@ -216,9 +216,15 @@ var moduleAutoprovision = {
     return result;
   },
   cbAfterSendForm: function cbAfterSendForm(response) {
-    // Form.js calls this on both success and failure paths. On failure the controller
+    // Form.js ignores non-error flash messages on the success path —
+    // surface the check-sync skip warning (phone without a known host) here.
+    var warnings = (response.message || {}).warning || [];
+    warnings.forEach(function (text) {
+      UserMessage.showWarning(text);
+    }); // Form.js calls this on both success and failure paths. On failure the controller
     // rolled the transaction back, so leave the marked-for-delete rows visible — removing
     // them would lie about the DB state.
+
     if (response.success === true) {
       $('tr.marked-for-delete').remove();
     } // Re-bind freshly inserted rows from mock ids to real database ids.

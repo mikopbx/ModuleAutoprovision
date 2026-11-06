@@ -50,6 +50,7 @@ Autoconfiguration is possible only for the local network of the enterprise, for 
     'mod_Autoprovision_templates_uri_template' => 'Sample',
     'mod_Autoprovision_phone_settings_user' => 'Employee',
     'mod_Autoprovision_phone_settings_mac' => 'MAC Address',
+    'mod_Autoprovision_reboot_unavailable' => 'Config saved; reboot is unavailable for phones: %macs%. They will apply the new config on their next refresh',
     'mod_Autoprovision_template_name' => 'Name',
     'mod_Autoprovision_search_tags' => 'Search...',
     'mod_Autoprovision_filter_posts' => 'Select…',
