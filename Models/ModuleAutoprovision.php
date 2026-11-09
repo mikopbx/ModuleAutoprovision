@@ -68,6 +68,25 @@ class ModuleAutoprovision extends ModulesModelsBase
     public $sip_secret;
 
     /**
+     * Secret for the deterministic HMAC signature (solt) of per-MAC getcfg
+     * provisioning URLs. Generated at install/upgrade time; never exposed in
+     * the UI or accepted from POST. Deliberately separate from sip_secret so
+     * rotating the service SIP password cannot invalidate URLs phones carry.
+     *
+     * @Column(type="string", nullable=true)
+     */
+    public $provisioning_secret;
+
+    /**
+     * getcfg signature policy: 'off' (legacy, no check), 'log' (serve everyone
+     * but log bad signatures), 'enforce' (404 on bad/missing solt).
+     * Defaults to 'enforce' when empty.
+     *
+     * @Column(type="string", nullable=true)
+     */
+    public $solt_mode;
+
+    /**
      * TCP port for the module's dedicated HTTP listener.
      * Served by a separate nginx server-block so phones bypass the global
      * HTTPS redirect of the admin UI. Stored as string to match Phalcon's

@@ -44,6 +44,7 @@ class WorkerProvisioningServerPnP extends WorkerBase
     private string $requests_dir;
     private bool $debug;
     private bool $verbose_syslog = false;
+    private string $provisioning_secret = '';
 
     public function getSettings($debug = false):void
     {
@@ -66,6 +67,7 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $macWhiteRaw      = (string)($data->mac_white ?? '');
         $macBlackRaw      = (string)($data->mac_black ?? '');
         $additionalParams = (string)($data->additional_params ?? '');
+        $this->provisioning_secret = AutoprovisionConf::getProvisioningSecret();
 
         $protocol  = 'http';
         $this->url = "$protocol://$pbxHost:$http_port/pbxcore/api/autoprovision";
@@ -491,7 +493,8 @@ class WorkerProvisioningServerPnP extends WorkerBase
             return [];
         }
 
-        if (count($this->mac_white) > 0 && ! in_array($headers['mac'], $this->mac_white, true)) {
+        $inWhite = in_array($headers['mac'], $this->mac_white, true);
+        if (count($this->mac_white) > 0 && !$inWhite) {
             // Если есть белый список, то черный не используем.
             // Провижить можно только белый список.
             SystemMessages::sysLogMsg(
@@ -502,8 +505,9 @@ class WorkerProvisioningServerPnP extends WorkerBase
             return [];
         }
 
-        if (count($this->mac_black) > 0 && in_array($headers['mac'], $this->mac_black, true)) {
-            // Если белый список пуст, то телефоны из черного списка провижить нельзя.
+        if (!$inWhite && count($this->mac_black) > 0 && in_array($headers['mac'], $this->mac_black, true)) {
+            // Whitelist membership wins over the blacklist: a MAC present in both
+            // lists must be provisioned, matching the whitelist-priority comment.
             SystemMessages::sysLogMsg(
                 self::LOG_TAG,
                 "rejecting MAC {$headers['mac']}: blacklisted",
@@ -705,8 +709,12 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $this->sendToHost($sock, $headers['phone_ip'], (int)$headers['phone_port'], $msg);
         $this->verbose("\n" . $msg);
 
-        $provisionUrl = "$this->url/getcfg?mac={$headers['mac']}&" . http_build_query($headers['Event']);
-        $provisionUrl .= '&solt=' . md5($headers['mac'] . getmypid());
+        // solt goes FIRST: Fanvil phones truncate the provisioning URL at a
+        // parameter boundary, so a trailing solt never reached the PBX. Putting
+        // it right after mac keeps the signature while the expendable trailing
+        // vendor/model/version fields may be cut off by the phone.
+        $solt = substr(hash_hmac('sha256', $headers['mac'], $this->provisioning_secret), 0, 32);
+        $provisionUrl = "$this->url/getcfg?mac={$headers['mac']}&solt={$solt}&" . http_build_query($headers['Event']);
 
         $msg = "NOTIFY sip:{$headers['phone_ip']}:{$headers['phone_port']} SIP/2.0\r\n" .
             "{$headers['Via']}\r\n" .

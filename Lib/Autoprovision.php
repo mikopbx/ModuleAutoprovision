@@ -100,6 +100,26 @@ class Autoprovision extends Injectable
             return '';
         }
 
+        // Some phones (Fanvil) truncate the provisioning URL's tail, so the
+        // vendor/model query fields may arrive cut off. Recover them from the
+        // User-Agent and the PnP device record — otherwise a phone without an
+        // assigned template would get no config at all.
+        if (empty($req_data['vendor'])) {
+            $req_data['vendor'] = self::detectVendorFromUserAgent((string)($req_data['user_agent'] ?? ''));
+        }
+        if (empty($req_data['vendor'])) {
+            $mm = strtolower((string)$phoneData->manufacturer_model);
+            foreach (array_keys(FirmwareRepository::VENDOR_EXTENSIONS) as $candidate) {
+                if (str_contains($mm, $candidate)) {
+                    $req_data['vendor'] = $candidate;
+                    break;
+                }
+            }
+        }
+        if (empty($req_data['model'])) {
+            $req_data['model'] = self::extractModel((string)$phoneData->manufacturer_model) ?? '';
+        }
+
         $sipData  = [];
         $userData = ModuleAutoprovisionUsers::find([
             'id_phone = :id_phone:',

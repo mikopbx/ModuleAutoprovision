@@ -48,7 +48,7 @@ class ModuleAutoprovisionController extends BaseController
     /**
      * Columns of ModuleAutoprovision that must never be writable through the admin form.
      */
-    private const PROTECTED_COLUMNS = ['id', 'sip_secret'];
+    private const PROTECTED_COLUMNS = ['id', 'sip_secret', 'provisioning_secret'];
 
     private string $moduleDir;
 
@@ -162,6 +162,11 @@ class ModuleAutoprovisionController extends BaseController
                 $record->http_port = $clean === false
                     ? (string)AutoprovisionConf::DEFAULT_HTTP_PORT
                     : (string)$clean;
+                continue;
+            }
+            if ($column === 'solt_mode') {
+                $mode = (string)($data['solt_mode'] ?? '');
+                $record->solt_mode = in_array($mode, ['off', 'log', 'enforce'], true) ? $mode : 'enforce';
                 continue;
             }
             if ($column === 'tftp_enabled') {

@@ -480,9 +480,31 @@ class GetController extends ModulesControllerBase
     }
 
     /**
+     * Serves the PnP-issued config URL. The route is NoAuth by design (phones
+     * cannot log in), so the deterministic per-MAC HMAC signature (solt) is the
+     * only credential — verify it before any generation work. Answers 404 (not
+     * 403) to avoid revealing whether a MAC exists.
      */
     public function getConfig(): void
     {
+        $mode = AutoprovisionConf::getSoltMode();
+        if ($mode !== 'off') {
+            $mac    = strtolower(trim((string)($this->request->getQuery('mac') ?? '')));
+            $solt   = (string)($this->request->getQuery('solt') ?? '');
+            $secret = AutoprovisionConf::getProvisioningSecret();
+            $expected = $secret !== ''
+                ? substr(hash_hmac('sha256', $mac, $secret), 0, 32)
+                : '';
+            if ($mac === '' || $solt === '' || $expected === '' || !hash_equals($expected, $solt)) {
+                $this->logHttpRequest(404, ['kind' => 'getcfg-bad-signature', 'mac' => $mac, 'mode' => $mode], LOG_WARNING);
+                if ($mode === 'enforce') {
+                    $this->response->setStatusCode(404, 'Not found');
+                    $this->response->sendRaw();
+                    $this->terminateStreamedResponse();
+                }
+                // 'log' mode: serve the config anyway — observation-only rollout.
+            }
+        }
         $this->streamModuleAction('getProvisionConfig');
     }
 

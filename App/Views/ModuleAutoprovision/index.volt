@@ -89,6 +89,23 @@
             </div>
             <div class="ui small note">{{ t._('mod_Autoprovision_tftp_enabled_hint') }}</div>
         </div>
+
+        <div class="eight wide field">
+          <label for="solt_mode">{{ t._('mod_Autoprovision_solt_mode') }}</label>
+          {% set soltMode = form.getValue('solt_mode')|default('enforce') %}
+          {% if soltMode not in ['off', 'log', 'enforce'] %}{% set soltMode = 'enforce' %}{% endif %}
+          <div class="ui fluid selection dropdown">
+            <input type="hidden" id="solt_mode" name="solt_mode" value="{{ soltMode|e }}">
+            <i class="dropdown icon"></i>
+            <div class="text">{{ t._('mod_Autoprovision_solt_mode_' ~ soltMode) }}</div>
+            <div class="menu">
+              <div class="item" data-value="enforce">{{ t._('mod_Autoprovision_solt_mode_enforce') }}</div>
+              <div class="item" data-value="log">{{ t._('mod_Autoprovision_solt_mode_log') }}</div>
+              <div class="item" data-value="off">{{ t._('mod_Autoprovision_solt_mode_off') }}</div>
+            </div>
+          </div>
+          <div class="ui small note">{{ t._('mod_Autoprovision_solt_mode_hint') }}</div>
+        </div>
     </div>
     <div class="ui bottom attached tab segment" data-tab="general-settings">
         <div class="ui message"> {{ t._('mod_Autoprovision_templates_uri_header') }}</div>
