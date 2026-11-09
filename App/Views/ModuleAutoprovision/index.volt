@@ -174,10 +174,10 @@
             {% endif %}
           >
             <td data-label="user" data-id="{{ template['id']|e }}">
-                <div class="ui dropdown">
+                <div class="ui fluid mini selection dropdown">
                   <input type="hidden" name="phone_settings[{{ template['id']|e }}][userId]" value="{{ template['userId']|default('')|e }}">
-                  <i class="user icon"></i>
-                  <span class="text">{{ t._('mod_Autoprovision_filter_posts') }}</span>
+                  <i class="dropdown icon"></i>
+                  <span class="default text">{{ t._('mod_Autoprovision_select_employee') }}</span>
                   <div class="menu">
                     <div class="ui icon search input">
                       <i class="search icon"></i>
@@ -185,7 +185,7 @@
                     </div>
                     <div class="divider"></div>
                     <div class="scrolling menu">
-                      <div class="item" data-value="">{{ t._('mod_Autoprovision_filter_posts') }}</div>
+                      <div class="item" data-value="">{{ t._('mod_Autoprovision_select_employee') }}</div>
                       {% for user in users %}
                       <div class="item" data-value="{{ user['userid']|e }}">{{ user['number']|default('')|e }} "{{ user['callerid']|default('')|e }} "</div>
                       {% endfor %}
@@ -197,10 +197,10 @@
                 <div class="ui fluid mini icon input"><input type="text"  name="phone_settings[{{ template['id']|e }}][mac]" placeholder="" value="{{ template['mac']|default('')|e }}"></div>
             </td>
             <td data-label="template" data-id="{{ template['id']|e }}">
-                <div class="ui dropdown" data-empty-item-label="{{ t._('mod_Autoprovision_filter_posts') }}">
+                <div class="ui fluid mini selection dropdown" data-empty-item-label="{{ t._('mod_Autoprovision_select_template') }}">
                   <input type="hidden" name="phone_settings[{{ template['id']|e }}][templateId]" value="{{ template['templateId']|default('')|e }}">
-                  <i class="file alternate icon"></i>
-                  <span class="text">{{ t._('mod_Autoprovision_filter_posts') }}</span>
+                  <i class="dropdown icon"></i>
+                  <span class="default text">{{ t._('mod_Autoprovision_select_template') }}</span>
                   <div class="menu">
                     <div class="ui icon search input">
                       <i class="search icon"></i>
@@ -210,7 +210,7 @@
                     <div class="scrolling menu">
                       {# The blank option must carry an empty data-value — the placeholder row
                          id previously leaked into phone_settings.templateId as "emptyTemplateRow". #}
-                      <div class="item" data-value="">{{ t._('mod_Autoprovision_filter_posts') }}</div>
+                      <div class="item" data-value="">{{ t._('mod_Autoprovision_select_template') }}</div>
                       {% for pattern in templates %}
                       {% if pattern['id'] != 'emptyTemplateRow' %}
                       <div class="item" data-value="{{ pattern['id']|e }}">{{ pattern['name']|default('')|e }}</div>

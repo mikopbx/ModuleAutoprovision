@@ -50,6 +50,8 @@ Autoconfiguration is possible only for the local network of the enterprise, for 
     'mod_Autoprovision_templates_uri_template' => 'Sample',
     'mod_Autoprovision_phone_settings_user' => 'Employee',
     'mod_Autoprovision_phone_settings_mac' => 'MAC Address',
+    'mod_Autoprovision_select_employee' => 'Select an employee',
+    'mod_Autoprovision_select_template' => 'Select a template',
     'mod_Autoprovision_reboot_unavailable' => 'Config saved; reboot is unavailable for phones: %macs%. They will apply the new config on their next refresh',
     'mod_Autoprovision_solt_mode' => 'Provisioning URL signature check (HMAC)',
     'mod_Autoprovision_solt_mode_enforce' => 'Require signature (recommended)',

@@ -54,6 +54,8 @@ return [
     'mod_Autoprovision_templates_uri_template'   => 'Шаблон',
     'mod_Autoprovision_phone_settings_user' => 'Сотрудник',
     'mod_Autoprovision_phone_settings_mac'  => 'MAC Адрес',
+    'mod_Autoprovision_select_employee'     => 'Выберите сотрудника',
+    'mod_Autoprovision_select_template'     => 'Выберите шаблон',
     'mod_Autoprovision_reboot_unavailable'  => 'Конфиг сохранён; перезагрузка недоступна для телефонов: %macs%. Конфигурация применится при следующем обновлении',
     'mod_Autoprovision_solt_mode'           => 'Проверка подписи URL (HMAC)',
     'mod_Autoprovision_solt_mode_enforce'   => 'Требовать подпись (рекомендуется)',
