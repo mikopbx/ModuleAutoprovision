@@ -12,6 +12,7 @@ namespace Modules\ModuleAutoprovision\Lib;
 
 use MikoPBX\Common\Models\Extensions;
 use MikoPBX\Common\Models\LanInterfaces;
+use MikoPBX\Common\Models\PbxSettings;
 use MikoPBX\Common\Models\Sip;
 use MikoPBX\Core\Asterisk\AGI;
 use MikoPBX\Core\System\MikoPBXConfig;
@@ -492,9 +493,9 @@ class Autoprovision extends Injectable
     }
 
     /**
-     * Substitutes the generic ({PBX_HOST}, {FIRMWARE_URL}) and per-user ({SIP_*})
-     * placeholders into a template body. Generic pass runs first so a template
-     * authoring {FIRMWARE_URL} inside a {SIP_*} block still renders correctly.
+     * Подставляет общие параметры ({PBX_HOST}, {SIP_PORT}, {FIRMWARE_URL})
+     * и SIP-данные сотрудника. Общие параметры обрабатываются первыми,
+     * до подстановки пользовательских значений.
      *
      * @param array<string,string> $sipReplacements
      */
@@ -507,6 +508,7 @@ class Autoprovision extends Injectable
         $generic = [
             '{FIRMWARE_URL}' => FirmwareRepository::resolveFirmwareUrl($vendor, $model),
             '{PBX_HOST}'     => self::resolvePbxHost(),
+            '{SIP_PORT}'     => (string)PbxSettings::getValueByKey(PbxSettings::SIP_PORT),
         ];
         $rendered = strtr($template, $generic);
         if (!empty($sipReplacements)) {

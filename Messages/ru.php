@@ -68,7 +68,7 @@ return [
     'mod_Autoprovision_other_pbx'  => 'Телефонная книга',
     'mod_Autoprovision_other_pbx_name'  => 'Наименование АТС',
     'mod_Autoprovision_other_pbx_address'  => 'Сетевой адрес АТС',
-    'mod_Autoprovision_templates_header'  => 'При описании шаблона допускается использовать параметры: <b>{SIP_USER_NAME}</b> - имя сотрудника <b>{SIP_NUM}</b>  - внутренний номер (логин) <b>{SIP_PASS}</b>  - пароль',
+    'mod_Autoprovision_templates_header'  => 'При описании шаблона допускается использовать параметры: <b>{SIP_USER_NAME}</b> - имя сотрудника <b>{SIP_NUM}</b>  - внутренний номер (логин) <b>{SIP_PASS}</b>  - пароль <b>{PBX_HOST}</b> - адрес АТС <b>{SIP_PORT}</b> - SIP-порт АТС (UDP/TCP, не TLS)',
     'mod_Autoprovision_other_pbx_header'  => '<b>Внимание!</b> Телефонная книга должна быть доступна для каждой АТС по URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br> 
 Перечислите все адреса, АТС, с которых необходимо получить телефонную книгу. <br> ',
 
