@@ -45,10 +45,8 @@ final class TemplateSeeder
 
         $templatesDir = dirname(__DIR__) . '/Setup/templates';
         foreach (self::SEEDS as $seed) {
-            // Skip when either the template name OR the URI is already taken: GetController
-            // matches by URI alone, so a duplicate '/examples/...' row would make the served
-            // template ambiguous (admins can rename a seeded template and re-click the button,
-            // which would otherwise insert a second URI row pointing at the new copy).
+            // Не перезаписываем существующий или переименованный шаблон.
+            // Осиротевший URI не блокирует восстановление удалённого примера.
             try {
                 $existingTemplate = Templates::findFirst([
                     'name = :name:',
@@ -58,7 +56,11 @@ final class TemplateSeeder
                     'uri = :uri:',
                     'bind' => ['uri' => $seed['uri']],
                 ]);
-                if ($existingTemplate !== null || $existingUri !== null) {
+                $uriTemplate = $existingUri !== null ? Templates::findFirst([
+                    'id = :id:',
+                    'bind' => ['id' => $existingUri->templateId],
+                ]) : null;
+                if ($existingTemplate !== null || $uriTemplate !== null) {
                     $result['skipped'][] = $seed['name'];
                     continue;
                 }
@@ -89,7 +91,7 @@ final class TemplateSeeder
                 continue;
             }
 
-            $uri             = new TemplatesUri();
+            $uri             = $existingUri ?? new TemplatesUri();
             $uri->uri        = $seed['uri'];
             $uri->templateId = (string)$template->id;
             if (!$uri->save()) {
