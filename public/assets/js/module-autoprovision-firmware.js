@@ -224,12 +224,7 @@ var moduleAutoprovisionFirmware = {
       var config = FilesAPI.configureResumable({
         target: "".concat(Config.pbxUrl, "/pbxcore/api/v3/files:upload"),
         fileType: ['rom', 'bin', 'fw', 'z'],
-        maxFileSize: moduleAutoprovisionFirmware.maxFileBytes,
-        query: function query() {
-          return {
-            category: 'autoprovision-firmware'
-          };
-        }
+        maxFileSize: moduleAutoprovisionFirmware.maxFileBytes
       });
       var resumable = new Resumable(config);
 
@@ -340,12 +335,7 @@ var moduleAutoprovisionFirmware = {
     var config = FilesAPI.configureResumable({
       target: "".concat(Config.pbxUrl, "/pbxcore/api/v3/files:upload"),
       fileType: ['rom', 'bin', 'fw', 'z'],
-      maxFileSize: moduleAutoprovisionFirmware.maxFileBytes,
-      query: function query() {
-        return {
-          category: 'autoprovision-firmware'
-        };
-      }
+      maxFileSize: moduleAutoprovisionFirmware.maxFileBytes
     });
     var resumable = new Resumable(config);
 

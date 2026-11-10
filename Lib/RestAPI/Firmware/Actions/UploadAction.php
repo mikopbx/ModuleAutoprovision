@@ -16,7 +16,9 @@ use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionFirmware;
 
 /**
  * Registers a firmware blob that the client has already pushed to Core's
- * chunked /pbxcore/api/v3/files:upload endpoint (category=autoprovision-firmware).
+ * chunked /pbxcore/api/v3/files:upload endpoint (without a `category` — Core
+ * rejects unknown categories; the upload itself stays validated by the
+ * per-vendor extension whitelist below).
  *
  * Why no multipart handler here: Core already does Resumable.js chunking, hash
  * checks, and the temp file lookup at /storage/usbdisk1/mikopbx/tmp/www_cache/
