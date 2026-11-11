@@ -72,10 +72,13 @@ class Autoprovision extends Injectable
      */
     public function generateConfigPhone(array $req_data): string
     {
-        $mac = (string)($req_data['mac'] ?? '');
+        // Canonical form for every downstream consumer: device lookup, template
+        // renderer, vendor generators (Grandstream embeds the MAC in the config).
+        $mac = MacAddress::normalize((string)($req_data['mac'] ?? ''));
         if ($mac === '') {
             return '';
         }
+        $req_data['mac'] = $mac;
 
         // Assigned template branch: same renderer as the per-MAC HTTP endpoint
         // (GetController::getConfigStatic), so both channels return a
@@ -236,15 +239,14 @@ class Autoprovision extends Injectable
      *
      * Several rows can match one MAC: the PnP worker autocreates an exact-MAC
      * row with empty userId/templateId, while operators may also add LIKE
-     * patterns (e.g. `aabbcc%`) bound to an employee. Selection rules:
-     *   1. rows with an empty userId never win (placeholders must not shadow
-     *      a filled binding);
-     *   2. an exact MAC match beats every pattern;
-     *   3. otherwise the longest (most specific) pattern wins.
+     * patterns (e.g. `aabbcc%`) bound to an employee. Selection rules live in
+     * MacAddress::selectBestRow(); matching normalizes separators and case on
+     * both sides, so a binding typed as `0c:38:3e:…` still serves the clean
+     * 12-hex MAC the provisioning channels send.
      */
     protected static function findUserIdByMac(string $mac): string
     {
-        $mac = strtolower(trim($mac));
+        $mac = MacAddress::normalize($mac);
         if ($mac === '') {
             return '';
         }
@@ -253,27 +255,16 @@ class Autoprovision extends Injectable
             return '';
         }
         $rows = $di->get('modelsManager')->createBuilder([
-            'models'     => ['TemplatesUsers' => TemplatesUsers::class],
-            'conditions' => ':mac: LIKE TemplatesUsers.mac',
-            'bind'       => ['mac' => $mac],
-            'columns'    => ['mac' => 'TemplatesUsers.mac', 'userId' => 'TemplatesUsers.userId'],
-            'order'      => 'LENGTH(TemplatesUsers.mac) DESC',
+            'models'  => ['TemplatesUsers' => TemplatesUsers::class],
+            'columns' => ['mac' => 'TemplatesUsers.mac', 'userId' => 'TemplatesUsers.userId'],
         ])->getQuery()->execute()->toArray();
 
-        $firstFilled = '';
-        foreach ($rows as $row) {
-            $userId = trim((string)($row['userId'] ?? ''));
-            if ($userId === '') {
-                continue;
-            }
-            if (strcasecmp((string)($row['mac'] ?? ''), $mac) === 0) {
-                return $userId;
-            }
-            if ($firstFilled === '') {
-                $firstFilled = $userId;
-            }
-        }
-        return $firstFilled;
+        $row = MacAddress::selectBestRow(
+            $rows,
+            $mac,
+            static fn(array $r): bool => trim((string)($r['userId'] ?? '')) !== ''
+        );
+        return $row === null ? '' : trim((string)$row['userId']);
     }
 
     /**
@@ -286,10 +277,12 @@ class Autoprovision extends Injectable
      * `generateConfigPhone()` multi-account flow remains the fallback when no
      * mapping exists.
      *
-     * Row selection mirrors findUserIdByMac(): rows whose rendered template is
-     * empty (PnP-autocreated placeholders, dangling templateId references)
-     * never shadow a filled binding; an exact MAC match wins over LIKE
-     * patterns, longer patterns win over shorter ones.
+     * Row selection mirrors findUserIdByMac() via MacAddress::selectBestRow():
+     * rows whose rendered template is empty (PnP-autocreated placeholders,
+     * dangling templateId references) never shadow a filled binding; an exact
+     * MAC match wins over LIKE patterns, longer patterns win over shorter ones.
+     * Separators and case are normalized on both sides, so bindings stored
+     * with colons match the clean MAC sent by the provisioning channels.
      *
      * Placeholder pipeline (order matters):
      *   1. `{PBX_HOST}` / `{FIRMWARE_URL}` — generic, evaluated once.
@@ -298,7 +291,7 @@ class Autoprovision extends Injectable
      */
     public static function renderTemplateConfig(string $mac, string $userAgent, ?string $vendorHint = null): ?string
     {
-        $mac = strtolower(trim($mac));
+        $mac = MacAddress::normalize($mac);
         if ($mac === '') {
             return null;
         }
@@ -308,19 +301,21 @@ class Autoprovision extends Injectable
         }
         $manager = $di->get('modelsManager');
 
+        // Two-stage selection: the candidate query carries only metadata plus
+        // LENGTH(Templates.template) — pulling every binding's full template
+        // body would duplicate a shared template once per phone and exhaust
+        // memory on large installs. The winner's body is fetched separately.
         $parameters = [
             'models'     => [
                 'TemplatesUsers' => TemplatesUsers::class,
             ],
-            'conditions' => ':mac: LIKE TemplatesUsers.mac',
-            'bind'       => ['mac' => $mac],
             'columns'    => [
-                'id'       => 'TemplatesUsers.id',
-                'mac'      => 'TemplatesUsers.mac',
-                'template' => 'Templates.template',
-                'userId'   => 'TemplatesUsers.userId',
+                'id'         => 'TemplatesUsers.id',
+                'mac'        => 'TemplatesUsers.mac',
+                'userId'     => 'TemplatesUsers.userId',
+                'templateId' => 'TemplatesUsers.templateId',
+                'tplLen'     => 'LENGTH(Templates.template)',
             ],
-            'order'      => 'LENGTH(TemplatesUsers.mac) DESC',
             'joins'      => [
                 'TemplatesUsers' => [
                     0 => Templates::class,
@@ -331,26 +326,21 @@ class Autoprovision extends Injectable
             ],
         ];
         $rows = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
-        $row  = null;
-        foreach ($rows as $candidate) {
-            if ((string)($candidate['template'] ?? '') === '') {
-                continue;
-            }
-            if (strcasecmp((string)($candidate['mac'] ?? ''), $mac) === 0) {
-                $row = $candidate;
-                break;
-            }
-            // Rows arrive longest-pattern-first; keep only the first filled
-            // pattern as the fallback — later ones are less specific.
-            if ($row === null) {
-                $row = $candidate;
-            }
-        }
+        $row  = MacAddress::selectBestRow(
+            $rows,
+            $mac,
+            static fn(array $r): bool => (int)($r['tplLen'] ?? 0) > 0
+        );
         if ($row === null) {
             return null;
         }
-        $template = (string)($row['template'] ?? '');
+        $templateRow = Templates::findFirst([
+            'id = :id:',
+            'bind' => ['id' => (string)$row['templateId']],
+        ]);
+        $template = (string)($templateRow->template ?? '');
         if ($template === '') {
+            // Body emptied between the two queries — treat as no binding.
             return null;
         }
 

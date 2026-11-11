@@ -19,6 +19,7 @@ use Phalcon\Tag;
 use Modules\ModuleAutoprovision\App\Forms\ModuleAutoprovisionForm;
 use Modules\ModuleAutoprovision\Lib\Autoprovision;
 use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+use Modules\ModuleAutoprovision\Lib\MacAddress;
 use Modules\ModuleAutoprovision\Lib\TemplateSeeder;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
@@ -276,7 +277,7 @@ class ModuleAutoprovisionController extends BaseController
                     continue;
                 }
                 $old    = $snapshot['bindings'][(string)$id] ?? null;
-                $oldMac = $old !== null ? strtolower((string)$old['mac']) : '';
+                $oldMac = $old !== null ? MacAddress::normalize((string)$old['mac']) : '';
                 if (!empty($rowData['__delete'])) {
                     // Binding removed: the phone falls back to the generated config.
                     if ($oldMac !== '') {
@@ -284,11 +285,13 @@ class ModuleAutoprovisionController extends BaseController
                     }
                     continue;
                 }
-                $mac        = strtolower(trim((string)($rowData['mac'] ?? '')));
+                $mac        = MacAddress::normalize((string)($rowData['mac'] ?? ''));
                 $userId     = (string)($rowData['userId'] ?? '');
                 $templateId = (string)($rowData['templateId'] ?? '');
+                // Compare canonical MACs: legacy rows stored with colons must not
+                // look "changed" on every save and reboot the phone needlessly.
                 $changed    = $old === null
-                    || $old['mac'] !== (string)($rowData['mac'] ?? '')
+                    || $oldMac !== $mac
                     || $old['userId'] !== $userId
                     || $old['templateId'] !== $templateId;
                 if ($mac !== '' && ($changed || in_array($templateId, $affectedTemplates, true))) {
@@ -431,6 +434,11 @@ class ModuleAutoprovisionController extends BaseController
                     // ("emptyTemplateRow"); normalise it so the sentinel never lands in a column.
                     if ($value === 'emptyTemplateRow') {
                         $value = '';
+                    }
+                    // Provisioning channels address phones by the separator-free MAC;
+                    // store the canonical form so a typed-in `0c:38:3e:…` still matches.
+                    if ($table === 'phone_settings' && $column === 'mac') {
+                        $value = MacAddress::normalize((string)$value);
                     }
                     $dbRow->{$column} = $value;
                 }

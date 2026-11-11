@@ -599,8 +599,9 @@ class WorkerProvisioningServerPnP extends WorkerBase
      *
      * A TemplatesUsers row with empty userId/templateId is created on the first
      * sighting so the phone shows up in the "Phone settings" tab by itself.
-     * SQLite's LIKE is case-insensitive, so an admin-entered row in any case
-     * variant counts as existing and no duplicate is created.
+     * MACs are compared in canonical form (MacAddress::normalize), so an
+     * admin-entered row in any case or separator variant counts as existing
+     * and no duplicate is created.
      *
      * All failures are logged and swallowed — the 200 OK and the NOTIFY with the
      * provisioning URL must reach the phone regardless of the database state.
@@ -640,11 +641,16 @@ class WorkerProvisioningServerPnP extends WorkerBase
                 );
             }
 
-            $binding = TemplatesUsers::findFirst([
-                'mac LIKE :mac:',
-                'bind' => ['mac' => $headers['mac']],
-            ]);
-            if ($binding === null) {
+            // A binding typed with separators (0c:38:…) is the same phone: compare
+            // canonical forms so discovery does not create a duplicate placeholder.
+            $bindingExists = false;
+            foreach (TemplatesUsers::find(['columns' => 'mac']) as $candidate) {
+                if (MacAddress::normalize((string)$candidate->mac) === $headers['mac']) {
+                    $bindingExists = true;
+                    break;
+                }
+            }
+            if (!$bindingExists) {
                 $binding             = new TemplatesUsers();
                 $binding->mac        = $headers['mac'];
                 $binding->userId     = '';
