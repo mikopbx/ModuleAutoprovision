@@ -18,6 +18,7 @@ use MikoPBX\PBXCoreREST\Controllers\Modules\ModulesControllerBase;
 use MikoPBX\PBXCoreREST\Lib\PbxExtensionsProcessor;
 use Modules\ModuleAutoprovision\Lib\Autoprovision;
 use Modules\ModuleAutoprovision\Lib\Phonebook\YealinkPhonebook;
+use Modules\ModuleAutoprovision\Lib\ProvisionUrl;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 use Modules\ModuleAutoprovision\Models\OtherPBX;
@@ -533,10 +534,14 @@ class GetController extends ModulesControllerBase
             $solt   = (string)($this->request->getQuery('solt') ?? '');
             $secret = AutoprovisionConf::getProvisioningSecret();
             $expected = $secret !== ''
-                ? substr(hash_hmac('sha256', $mac, $secret), 0, 32)
+                ? ProvisionUrl::calculateSolt($mac, $secret)
                 : '';
             if ($mac === '' || $solt === '' || $expected === '' || !hash_equals($expected, $solt)) {
-                $this->logHttpRequest(404, ['kind' => 'getcfg-bad-signature', 'mac' => $mac, 'mode' => $mode], LOG_WARNING);
+                // getcfg-no-secret: the check itself cannot run — most often the
+                // settings row is not readable yet (fresh install, mid-upgrade);
+                // everything else is a genuine signature mismatch.
+                $kind = $expected === '' ? 'getcfg-no-secret' : 'getcfg-bad-signature';
+                $this->logHttpRequest(404, ['kind' => $kind, 'mac' => $mac, 'mode' => $mode], LOG_WARNING);
                 if ($mode === 'enforce') {
                     $this->response->setStatusCode(404, 'Not found');
                     $this->response->sendRaw();

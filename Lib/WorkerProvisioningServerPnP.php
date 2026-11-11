@@ -44,7 +44,6 @@ class WorkerProvisioningServerPnP extends WorkerBase
     private string $requests_dir;
     private bool $debug;
     private bool $verbose_syslog = false;
-    private string $provisioning_secret = '';
 
     public function getSettings($debug = false):void
     {
@@ -67,7 +66,6 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $macWhiteRaw      = (string)($data->mac_white ?? '');
         $macBlackRaw      = (string)($data->mac_black ?? '');
         $additionalParams = (string)($data->additional_params ?? '');
-        $this->provisioning_secret = AutoprovisionConf::getProvisioningSecret();
 
         $protocol  = 'http';
         $this->url = "$protocol://$pbxHost:$http_port/pbxcore/api/autoprovision";
@@ -709,12 +707,26 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $this->sendToHost($sock, $headers['phone_ip'], (int)$headers['phone_port'], $msg);
         $this->verbose("\n" . $msg);
 
+        // The secret is re-read per SUBSCRIBE: the worker may start before
+        // installDB() has written the settings row (or before Phalcon picks up
+        // the new columns after an update) — a secret cached at startup was ''
+        // for the whole process lifetime, and every issued URL then carried a
+        // provably invalid empty-key HMAC that getcfg rejected under enforce.
+        $secret = AutoprovisionConf::getProvisioningSecret();
+        if ($secret === '') {
+            SystemMessages::sysLogMsg(
+                self::LOG_TAG,
+                'provisioning_secret is empty — issuing an unsigned getcfg URL '
+                    . "(it will be rejected while solt_mode=enforce) for mac={$headers['mac']}",
+                LOG_WARNING
+            );
+        }
         // solt goes FIRST: Fanvil phones truncate the provisioning URL at a
         // parameter boundary, so a trailing solt never reached the PBX. Putting
         // it right after mac keeps the signature while the expendable trailing
         // vendor/model/version fields may be cut off by the phone.
-        $solt = substr(hash_hmac('sha256', $headers['mac'], $this->provisioning_secret), 0, 32);
-        $provisionUrl = "$this->url/getcfg?mac={$headers['mac']}&solt={$solt}&" . http_build_query($headers['Event']);
+        $eventParams  = is_array($headers['Event'] ?? null) ? $headers['Event'] : [];
+        $provisionUrl = ProvisionUrl::buildProvisionUrl($this->url, (string)$headers['mac'], $eventParams, $secret);
 
         $msg = "NOTIFY sip:{$headers['phone_ip']}:{$headers['phone_port']} SIP/2.0\r\n" .
             "{$headers['Via']}\r\n" .
