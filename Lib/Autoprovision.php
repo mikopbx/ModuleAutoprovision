@@ -11,6 +11,8 @@ declare(strict_types=1);
 namespace Modules\ModuleAutoprovision\Lib;
 
 use MikoPBX\Common\Models\Extensions;
+use MikoPBX\Common\Models\LanInterfaces;
+use MikoPBX\Common\Models\PbxSettings;
 use MikoPBX\Common\Models\Sip;
 use MikoPBX\Core\Asterisk\AGI;
 use MikoPBX\Core\System\MikoPBXConfig;
@@ -57,16 +59,41 @@ class Autoprovision extends Injectable
     }
 
     /**
-     * Generates the vendor-specific provisioning config file for the phone identified by $req_data['mac'].
+     * Generates the provisioning config file for the phone identified by $req_data['mac'].
+     *
+     * Configuration priority: an explicitly assigned template (TemplatesUsers
+     * row with a non-empty templateId) wins and renders the exact body the
+     * per-MAC HTTP endpoint serves; without one the vendor generators take
+     * over with legacy ModuleAutoprovisionUsers line mappings, then the
+     * TemplatesUsers fallback, then the shared `apv-miko-pbx` account.
      *
      * @param array $req_data Provisioning request payload (must include 'mac' and 'vendor').
      * @return string Absolute path to the generated config, or '' if the phone is unknown.
      */
     public function generateConfigPhone(array $req_data): string
     {
-        $mac = (string)($req_data['mac'] ?? '');
+        // Canonical form for every downstream consumer: device lookup, template
+        // renderer, vendor generators (Grandstream embeds the MAC in the config).
+        $mac = MacAddress::normalize((string)($req_data['mac'] ?? ''));
         if ($mac === '') {
             return '';
+        }
+        $req_data['mac'] = $mac;
+
+        // Assigned template branch: same renderer as the per-MAC HTTP endpoint
+        // (GetController::getConfigStatic), so both channels return a
+        // byte-identical body for the same MAC.
+        $templateBody = self::renderTemplateConfig(
+            $mac,
+            (string)($req_data['user_agent'] ?? ''),
+            isset($req_data['vendor']) ? (string)$req_data['vendor'] : null
+        );
+        if ($templateBody !== null) {
+            $filename = $this->makeConfigFilename($mac, 'cfg');
+            if (@file_put_contents($filename, $templateBody) === false) {
+                return '';
+            }
+            return $filename;
         }
 
         $phoneData = ModuleAutoprovisionDevice::findFirst([
@@ -75,6 +102,26 @@ class Autoprovision extends Injectable
         ]);
         if ($phoneData === null) {
             return '';
+        }
+
+        // Some phones (Fanvil) truncate the provisioning URL's tail, so the
+        // vendor/model query fields may arrive cut off. Recover them from the
+        // User-Agent and the PnP device record — otherwise a phone without an
+        // assigned template would get no config at all.
+        if (empty($req_data['vendor'])) {
+            $req_data['vendor'] = self::detectVendorFromUserAgent((string)($req_data['user_agent'] ?? ''));
+        }
+        if (empty($req_data['vendor'])) {
+            $mm = strtolower((string)$phoneData->manufacturer_model);
+            foreach (array_keys(FirmwareRepository::VENDOR_EXTENSIONS) as $candidate) {
+                if (str_contains($mm, $candidate)) {
+                    $req_data['vendor'] = $candidate;
+                    break;
+                }
+            }
+        }
+        if (empty($req_data['model'])) {
+            $req_data['model'] = self::extractModel((string)$phoneData->manufacturer_model) ?? '';
         }
 
         $sipData  = [];
@@ -159,16 +206,13 @@ class Autoprovision extends Injectable
      */
     protected static function getTemplatesUsersSipData(string $mac): array
     {
-        $binding = TemplatesUsers::findFirst([
-            ':mac: LIKE mac AND userId IS NOT NULL',
-            'bind' => ['mac' => strtolower($mac)],
-        ]);
-        if ($binding === null || (string)$binding->userId === '') {
+        $userId = self::findUserIdByMac($mac);
+        if ($userId === '') {
             return [];
         }
         $exten = Extensions::findFirst([
             'userid = :userid: AND type = :type:',
-            'bind' => ['userid' => $binding->userId, 'type' => 'SIP'],
+            'bind' => ['userid' => $userId, 'type' => 'SIP'],
         ]);
         if ($exten === null) {
             return [];
@@ -190,6 +234,40 @@ class Autoprovision extends Injectable
     }
 
     /**
+     * Finds the `TemplatesUsers.userId` that should serve `$mac`, or '' when
+     * the MAC has no filled binding.
+     *
+     * Several rows can match one MAC: the PnP worker autocreates an exact-MAC
+     * row with empty userId/templateId, while operators may also add LIKE
+     * patterns (e.g. `aabbcc%`) bound to an employee. Selection rules live in
+     * MacAddress::selectBestRow(); matching normalizes separators and case on
+     * both sides, so a binding typed as `0c:38:3e:…` still serves the clean
+     * 12-hex MAC the provisioning channels send.
+     */
+    protected static function findUserIdByMac(string $mac): string
+    {
+        $mac = MacAddress::normalize($mac);
+        if ($mac === '') {
+            return '';
+        }
+        $di = \Phalcon\Di\Di::getDefault();
+        if ($di === null) {
+            return '';
+        }
+        $rows = $di->get('modelsManager')->createBuilder([
+            'models'  => ['TemplatesUsers' => TemplatesUsers::class],
+            'columns' => ['mac' => 'TemplatesUsers.mac', 'userId' => 'TemplatesUsers.userId'],
+        ])->getQuery()->execute()->toArray();
+
+        $row = MacAddress::selectBestRow(
+            $rows,
+            $mac,
+            static fn(array $r): bool => trim((string)($r['userId'] ?? '')) !== ''
+        );
+        return $row === null ? '' : trim((string)$row['userId']);
+    }
+
+    /**
      * Renders the per-MAC `TemplatesUsers`-bound config for `$mac` and returns
      * the body as a string, or null when no template is mapped to the MAC.
      *
@@ -199,6 +277,13 @@ class Autoprovision extends Injectable
      * `generateConfigPhone()` multi-account flow remains the fallback when no
      * mapping exists.
      *
+     * Row selection mirrors findUserIdByMac() via MacAddress::selectBestRow():
+     * rows whose rendered template is empty (PnP-autocreated placeholders,
+     * dangling templateId references) never shadow a filled binding; an exact
+     * MAC match wins over LIKE patterns, longer patterns win over shorter ones.
+     * Separators and case are normalized on both sides, so bindings stored
+     * with colons match the clean MAC sent by the provisioning channels.
+     *
      * Placeholder pipeline (order matters):
      *   1. `{PBX_HOST}` / `{FIRMWARE_URL}` — generic, evaluated once.
      *   2. `{SIP_NUM}` / `{SIP_USER_NAME}` / `{SIP_PASS}` — per-user, looked up
@@ -206,7 +291,7 @@ class Autoprovision extends Injectable
      */
     public static function renderTemplateConfig(string $mac, string $userAgent, ?string $vendorHint = null): ?string
     {
-        $mac = strtolower(trim($mac));
+        $mac = MacAddress::normalize($mac);
         if ($mac === '') {
             return null;
         }
@@ -216,18 +301,21 @@ class Autoprovision extends Injectable
         }
         $manager = $di->get('modelsManager');
 
+        // Two-stage selection: the candidate query carries only metadata plus
+        // LENGTH(Templates.template) — pulling every binding's full template
+        // body would duplicate a shared template once per phone and exhaust
+        // memory on large installs. The winner's body is fetched separately.
         $parameters = [
             'models'     => [
                 'TemplatesUsers' => TemplatesUsers::class,
             ],
-            'conditions' => ':mac: LIKE TemplatesUsers.mac',
-            'bind'       => ['mac' => $mac],
             'columns'    => [
-                'id'       => 'TemplatesUsers.id',
-                'template' => 'Templates.template',
-                'userId'   => 'TemplatesUsers.userId',
+                'id'         => 'TemplatesUsers.id',
+                'mac'        => 'TemplatesUsers.mac',
+                'userId'     => 'TemplatesUsers.userId',
+                'templateId' => 'TemplatesUsers.templateId',
+                'tplLen'     => 'LENGTH(Templates.template)',
             ],
-            'limit'      => 1,
             'joins'      => [
                 'TemplatesUsers' => [
                     0 => Templates::class,
@@ -237,12 +325,22 @@ class Autoprovision extends Injectable
                 ],
             ],
         ];
-        $row = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
-        if (empty($row)) {
+        $rows = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
+        $row  = MacAddress::selectBestRow(
+            $rows,
+            $mac,
+            static fn(array $r): bool => (int)($r['tplLen'] ?? 0) > 0
+        );
+        if ($row === null) {
             return null;
         }
-        $template = (string)($row[0]['template'] ?? '');
+        $templateRow = Templates::findFirst([
+            'id = :id:',
+            'bind' => ['id' => (string)$row['templateId']],
+        ]);
+        $template = (string)($templateRow->template ?? '');
         if ($template === '') {
+            // Body emptied between the two queries — treat as no binding.
             return null;
         }
 
@@ -253,7 +351,7 @@ class Autoprovision extends Injectable
                 'Extensions' => Extensions::class,
             ],
             'conditions' => ':userid: = Extensions.userid',
-            'bind'       => ['userid' => $row[0]['userId']],
+            'bind'       => ['userid' => $row['userId']],
             'columns'    => [
                 '{SIP_USER_NAME}' => 'Extensions.callerid',
                 '{SIP_NUM}'       => 'Extensions.number',
@@ -350,8 +448,8 @@ class Autoprovision extends Injectable
      */
     public static function lookupSipDataForMac(string $mac): array
     {
-        $mac = strtolower(trim($mac));
-        if ($mac === '') {
+        $userId = self::findUserIdByMac($mac);
+        if ($userId === '') {
             return [];
         }
         $di = \Phalcon\Di\Di::getDefault();
@@ -360,21 +458,10 @@ class Autoprovision extends Injectable
         }
         $manager = $di->get('modelsManager');
 
-        $mapping = $manager->createBuilder([
-            'models'     => ['TemplatesUsers' => TemplatesUsers::class],
-            'conditions' => ':mac: LIKE TemplatesUsers.mac',
-            'bind'       => ['mac' => $mac],
-            'columns'    => ['userId' => 'TemplatesUsers.userId'],
-            'limit'      => 1,
-        ])->getQuery()->execute()->toArray();
-        if (empty($mapping) || empty($mapping[0]['userId'])) {
-            return [];
-        }
-
         $sipRow = $manager->createBuilder([
             'models'     => ['Extensions' => Extensions::class],
             'conditions' => ':userid: = Extensions.userid',
-            'bind'       => ['userid' => $mapping[0]['userId']],
+            'bind'       => ['userid' => $userId],
             'columns'    => [
                 '{SIP_USER_NAME}' => 'Extensions.callerid',
                 '{SIP_NUM}'       => 'Extensions.number',
@@ -396,9 +483,9 @@ class Autoprovision extends Injectable
     }
 
     /**
-     * Substitutes the generic ({PBX_HOST}, {FIRMWARE_URL}) and per-user ({SIP_*})
-     * placeholders into a template body. Generic pass runs first so a template
-     * authoring {FIRMWARE_URL} inside a {SIP_*} block still renders correctly.
+     * Подставляет общие параметры ({PBX_HOST}, {SIP_PORT}, {FIRMWARE_URL})
+     * и SIP-данные сотрудника. Общие параметры обрабатываются первыми,
+     * до подстановки пользовательских значений.
      *
      * @param array<string,string> $sipReplacements
      */
@@ -411,6 +498,7 @@ class Autoprovision extends Injectable
         $generic = [
             '{FIRMWARE_URL}' => FirmwareRepository::resolveFirmwareUrl($vendor, $model),
             '{PBX_HOST}'     => self::resolvePbxHost(),
+            '{SIP_PORT}'     => (string)PbxSettings::getValueByKey(PbxSettings::SIP_PORT),
         ];
         $rendered = strtr($template, $generic);
         if (!empty($sipReplacements)) {
@@ -459,6 +547,53 @@ class Autoprovision extends Injectable
         }
         $tail = trim(implode(' ', $parts));
         return $tail === '' ? null : $tail;
+    }
+
+    /**
+     * Returns the LAN interface whose subnet contains $host (longest prefix
+     * wins), or '' when no interface can reach the phone directly.
+     *
+     * Used to pick the source address for the check-sync NOTIFY sent after a
+     * settings save — the AGI flow gets the interface from ARP, which is not
+     * available from the web request that triggers the reboot here.
+     */
+    public static function findEgressInterface(string $host): string
+    {
+        if (!filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            return '';
+        }
+        static $subnets = null;
+        if ($subnets === null) {
+            $subnets = [];
+            $net = new Network();
+            $names = $net->getInterfacesNames();
+            // On bare metal getInterfacesNames() skips virtual NICs, which drops
+            // the kernel-created vlanN interfaces — phones in a voice VLAN would
+            // look unreachable. Append the VLANs configured in the PBX settings.
+            foreach (LanInterfaces::find(['conditions' => 'vlanid > 0', 'columns' => 'vlanid']) as $vlanRow) {
+                $names[] = 'vlan' . $vlanRow->vlanid;
+            }
+            foreach (array_unique($names) as $iface) {
+                $info = $net->getInterface($iface);
+                $ip   = (string)($info['ipaddr'] ?? '');
+                $cidr = (int)($info['subnet'] ?? 0);
+                if ($ip !== '' && $cidr > 0
+                    && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                    $subnets[$iface] = [(int)ip2long($ip), $cidr];
+                }
+            }
+        }
+        $hostLong = (int)ip2long($host);
+        $bestIface = '';
+        $bestLen   = -1;
+        foreach ($subnets as $iface => [$ipLong, $cidr]) {
+            $mask = (0xFFFFFFFF << (32 - $cidr)) & 0xFFFFFFFF;
+            if (($hostLong & $mask) === ($ipLong & $mask) && $cidr > $bestLen) {
+                $bestIface = $iface;
+                $bestLen   = $cidr;
+            }
+        }
+        return $bestIface;
     }
 
     /**

@@ -26,8 +26,9 @@ use MikoPBX\PBXCoreREST\Lib\Common\CommonDataStructure;
  * planned TFTP fallback).
  *
  * Upload flow: client first PUSHes the file chunks through Core's
- * /pbxcore/api/v3/files:upload (category=autoprovision-firmware) and then
- * POSTs here with the resulting `file_id` to register the blob.
+ * /pbxcore/api/v3/files:upload (without a `category` — Core rejects unknown
+ * categories) and then POSTs here with the resulting `file_id` to register
+ * the blob.
  */
 #[ApiResource(
     path: '/pbxcore/api/v3/module-autoprovision/firmware',

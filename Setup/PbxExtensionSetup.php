@@ -70,6 +70,17 @@ class PbxExtensionSetup extends PbxExtensionSetupBase
             $settings->sip_secret = bin2hex(random_bytes(16));
         }
 
+        if (empty($settings->provisioning_secret)) {
+            // Deterministic HMAC signing secret for getcfg URLs. Separate from
+            // sip_secret: changing the SIP password must not invalidate the
+            // provisioning URLs phones already carry. Preserved on upgrades.
+            $settings->provisioning_secret = bin2hex(random_bytes(16));
+        }
+
+        if (empty($settings->solt_mode)) {
+            $settings->solt_mode = 'enforce';
+        }
+
         if (empty($settings->http_port)) {
             // Unprivileged port that doesn't clash with WEBPort/WEBHTTPSPort or SIP.
             $settings->http_port = '8480';

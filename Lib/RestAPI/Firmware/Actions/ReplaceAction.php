@@ -17,7 +17,7 @@ use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionFirmware;
 /**
  * Replaces the on-disk blob of an existing firmware row with a freshly uploaded
  * file (the client first pushes chunks to Core's /pbxcore/api/v3/files:upload
- * with category=autoprovision-firmware, then PUTs the resulting file_id here).
+ * without a `category`, then PUTs the resulting file_id here).
  *
  * Strategy:
  *   1. Stage the new file alongside the old one as `<filename>.new`.

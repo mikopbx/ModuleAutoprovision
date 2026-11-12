@@ -50,6 +50,28 @@ class AutoprovisionConf extends ConfigClass
     }
 
     /**
+     * Returns the secret used to sign per-MAC getcfg URLs (solt).
+     * Seeded at install/upgrade time by PbxExtensionSetup::installDB().
+     * An empty value means "not provisioned yet" — no solt can validate.
+     */
+    public static function getProvisioningSecret(): string
+    {
+        $settings = ModuleAutoprovision::findFirst();
+        return (string)($settings->provisioning_secret ?? '');
+    }
+
+    /**
+     * Returns the getcfg signature policy: 'off', 'log' or 'enforce'.
+     * Unknown/empty values fall back to 'enforce' (secure default).
+     */
+    public static function getSoltMode(): string
+    {
+        $settings = ModuleAutoprovision::findFirst();
+        $mode     = (string)($settings->solt_mode ?? '');
+        return in_array($mode, ['off', 'log', 'enforce'], true) ? $mode : 'enforce';
+    }
+
+    /**
      * Returns the TCP port served by the module's dedicated nginx server-block.
      *
      * Falls back to {@see self::DEFAULT_HTTP_PORT} when the value in the DB is

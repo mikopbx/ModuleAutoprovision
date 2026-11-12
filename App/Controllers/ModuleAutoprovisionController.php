@@ -13,12 +13,16 @@ namespace Modules\ModuleAutoprovision\App\Controllers;
 use MikoPBX\AdminCabinet\Controllers\BaseController;
 use MikoPBX\AdminCabinet\Providers\AssetProvider;
 use MikoPBX\Common\Models\Extensions;
+use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Modules\PbxExtensionUtils;
 use Phalcon\Tag;
 use Modules\ModuleAutoprovision\App\Forms\ModuleAutoprovisionForm;
+use Modules\ModuleAutoprovision\Lib\Autoprovision;
 use Modules\ModuleAutoprovision\Lib\AutoprovisionConf;
+use Modules\ModuleAutoprovision\Lib\MacAddress;
 use Modules\ModuleAutoprovision\Lib\TemplateSeeder;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
+use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 use Modules\ModuleAutoprovision\Models\OtherPBX;
 use Modules\ModuleAutoprovision\Models\Templates;
 use Modules\ModuleAutoprovision\Models\TemplatesUri;
@@ -45,7 +49,7 @@ class ModuleAutoprovisionController extends BaseController
     /**
      * Columns of ModuleAutoprovision that must never be writable through the admin form.
      */
-    private const PROTECTED_COLUMNS = ['id', 'sip_secret'];
+    private const PROTECTED_COLUMNS = ['id', 'sip_secret', 'provisioning_secret'];
 
     private string $moduleDir;
 
@@ -115,6 +119,24 @@ class ModuleAutoprovisionController extends BaseController
         $data   = $this->request->getPost();
         $record = ModuleAutoprovision::findFirst() ?? new ModuleAutoprovision();
 
+        // Snapshots before any writes: notifySavedPhones() uses them to reboot
+        // only the phones whose rendered config actually changed.
+        $snapshot = [
+            'pbx_host' => trim((string)($record->pbx_host ?? '')),
+            'bindings' => [],
+            'templates' => [],
+        ];
+        foreach (TemplatesUsers::find() as $row) {
+            $snapshot['bindings'][(string)$row->id] = [
+                'mac'        => (string)$row->mac,
+                'userId'     => (string)$row->userId,
+                'templateId' => (string)$row->templateId,
+            ];
+        }
+        foreach (Templates::find() as $row) {
+            $snapshot['templates'][(string)$row->id] = (string)$row->template;
+        }
+
         $this->db->begin();
 
         // Snapshot the model's column names; iterating $record directly is unreliable in Phalcon 5.
@@ -141,6 +163,11 @@ class ModuleAutoprovisionController extends BaseController
                 $record->http_port = $clean === false
                     ? (string)AutoprovisionConf::DEFAULT_HTTP_PORT
                     : (string)$clean;
+                continue;
+            }
+            if ($column === 'solt_mode') {
+                $mode = (string)($data['solt_mode'] ?? '');
+                $record->solt_mode = in_array($mode, ['off', 'log', 'enforce'], true) ? $mode : 'enforce';
                 continue;
             }
             if ($column === 'tftp_enabled') {
@@ -190,6 +217,142 @@ class ModuleAutoprovisionController extends BaseController
         $this->view->resultSaveTables = $resultSaveTables;
 
         $this->db->commit();
+
+        // After the commit: a phone told to re-fetch its config must see the
+        // freshly saved rows. Notify failures never turn the save into a failure.
+        // Compare against the value actually stored, not the raw POST — the
+        // pbx_host field may be absent from a tab-scoped submission.
+        $notifyAll = $snapshot['pbx_host'] !== trim((string)($record->pbx_host ?? ''));
+        $this->notifySavedPhones($data, $snapshot, $notifyAll);
+    }
+
+    /**
+     * Sends a check-sync NOTIFY (reboot) to every phone whose rendered config
+     * actually changed with this save, so the new config applies within seconds
+     * instead of at the next power cycle:
+     *   - a pbx_host change rewrites {PBX_HOST} for everyone -> the whole device
+     *     registry (covers phones discovered after the page was opened);
+     *   - an edited or deleted template body -> every phone currently bound to it
+     *     (LIKE-mask bindings are expanded through the device registry);
+     *   - a changed or newly added phone_settings row -> that phone;
+     *   - a deleted binding, or a replaced/cleared MAC -> the previously bound phone.
+     * Saving without changes notifies nobody.
+     *
+     * Phones without a known reachable host are skipped with a single flash
+     * warning; send errors are logged by clientNotifyReboot(). Each concrete
+     * device is notified at most once even when several rules match it.
+     *
+     * @param array<string, mixed> $data Raw POST body (same shape as saveAction).
+     * @param array<string, mixed> $snapshot pbx_host, bindings and template bodies
+     *                                       captured before the save.
+     * @param bool $notifyAll True when the stored pbx_host actually changed.
+     */
+    private function notifySavedPhones(array $data, array $snapshot, bool $notifyAll): void
+    {
+        $autoprovision = new Autoprovision();
+        $macsToNotify  = [];
+
+        if ($notifyAll) {
+            foreach (ModuleAutoprovisionDevice::find() as $device) {
+                $mac = strtolower((string)$device->mac);
+                if ($mac !== '') {
+                    $macsToNotify[] = $mac;
+                }
+            }
+        } else {
+            // Templates edited or deleted: every phone bound to one of them.
+            $affectedTemplates = [];
+            foreach (($data['templates'] ?? []) as $id => $rowData) {
+                if (!is_array($rowData)) {
+                    continue;
+                }
+                if (!empty($rowData['__delete'])
+                    || (string)($rowData['template'] ?? '') !== ($snapshot['templates'][(string)$id] ?? '')) {
+                    $affectedTemplates[] = (string)$id;
+                }
+            }
+
+            foreach (($data['phone_settings'] ?? []) as $id => $rowData) {
+                if (!is_array($rowData)) {
+                    continue;
+                }
+                $old    = $snapshot['bindings'][(string)$id] ?? null;
+                $oldMac = $old !== null ? MacAddress::normalize((string)$old['mac']) : '';
+                if (!empty($rowData['__delete'])) {
+                    // Binding removed: the phone falls back to the generated config.
+                    if ($oldMac !== '') {
+                        $macsToNotify[] = $oldMac;
+                    }
+                    continue;
+                }
+                $mac        = MacAddress::normalize((string)($rowData['mac'] ?? ''));
+                $userId     = (string)($rowData['userId'] ?? '');
+                $templateId = (string)($rowData['templateId'] ?? '');
+                // Compare canonical MACs: legacy rows stored with colons must not
+                // look "changed" on every save and reboot the phone needlessly.
+                $changed    = $old === null
+                    || $oldMac !== $mac
+                    || $old['userId'] !== $userId
+                    || $old['templateId'] !== $templateId;
+                if ($mac !== '' && ($changed || in_array($templateId, $affectedTemplates, true))) {
+                    $macsToNotify[] = $mac;
+                }
+                // MAC replaced or cleared: the previously bound phone re-renders too.
+                if ($oldMac !== '' && $oldMac !== $mac) {
+                    $macsToNotify[] = $oldMac;
+                }
+            }
+        }
+        if ($macsToNotify === []) {
+            return;
+        }
+
+        $sent    = [];
+        $skipped = [];
+        foreach (array_unique($macsToNotify) as $mac) {
+            // A LIKE-mask binding stands for several phones: the LIKE lookup
+            // below resolves it through the device registry. A mask matching no
+            // devices has nobody to notify — that is not a skip-worthy failure.
+            $targets = ModuleAutoprovisionDevice::find([
+                'mac LIKE :mac:',
+                'bind' => ['mac' => $mac],
+            ]);
+            if (count($targets) === 0 && !str_contains($mac, '%') && !str_contains($mac, '_')) {
+                $skipped[] = $mac;
+                continue;
+            }
+            foreach ($targets as $device) {
+                $devMac = strtolower((string)$device->mac);
+                // An exact MAC and a mask (or two overlapping masks) can resolve
+                // to the same device — notify it once, not once per rule.
+                if (isset($sent[$devMac])) {
+                    continue;
+                }
+                $sent[$devMac] = true;
+                $host = trim((string)$device->host);
+                $port = (int)$device->port;
+                $eth  = $host !== '' ? Autoprovision::findEgressInterface($host) : '';
+                if ($host === '' || $port <= 0 || $eth === '') {
+                    $skipped[] = $devMac;
+                    continue;
+                }
+                $autoprovision->clientNotifyReboot($host, $port, $eth);
+            }
+        }
+        $skipped = array_values(array_unique($skipped));
+        if ($skipped !== []) {
+            SystemMessages::sysLogMsg(
+                'ModuleAutoprovision',
+                'check-sync skipped for ' . count($skipped) . ' phone(s): no reachable host ('
+                    . implode(', ', array_map('strtoupper', $skipped)) . ')',
+                LOG_NOTICE
+            );
+            $this->flash->warning(
+                $this->translation->_('mod_Autoprovision_reboot_unavailable', [
+                    'macs' => implode(', ', $skipped),
+                ])
+            );
+        }
     }
 
     /**
@@ -266,6 +429,16 @@ class ModuleAutoprovisionController extends BaseController
                 foreach ($rowData as $column => $value) {
                     if ($column === '__delete') {
                         continue;
+                    }
+                    // The dropdown blank option used to submit the placeholder row id
+                    // ("emptyTemplateRow"); normalise it so the sentinel never lands in a column.
+                    if ($value === 'emptyTemplateRow') {
+                        $value = '';
+                    }
+                    // Provisioning channels address phones by the separator-free MAC;
+                    // store the canonical form so a typed-in `0c:38:3e:…` still matches.
+                    if ($table === 'phone_settings' && $column === 'mac') {
+                        $value = MacAddress::normalize((string)$value);
                     }
                     $dbRow->{$column} = $value;
                 }

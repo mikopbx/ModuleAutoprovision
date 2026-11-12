@@ -223,13 +223,11 @@ var moduleAutoprovisionFirmware = {
       document.body.appendChild(input);
       var config = FilesAPI.configureResumable({
         target: "".concat(Config.pbxUrl, "/pbxcore/api/v3/files:upload"),
-        fileType: ['rom', 'bin', 'fw', 'z'],
-        maxFileSize: moduleAutoprovisionFirmware.maxFileBytes,
-        query: function query() {
-          return {
-            category: 'autoprovision-firmware'
-          };
-        }
+        // Leading dots are required: Resumable's accept-attribute builder
+        // prefixes them only for multi-char entries, so a bare 'z' ends up
+        // without a dot and browsers drop it from the file-picker filter.
+        fileType: ['.rom', '.bin', '.fw', '.z'],
+        maxFileSize: moduleAutoprovisionFirmware.maxFileBytes
       });
       var resumable = new Resumable(config);
 
@@ -337,15 +335,11 @@ var moduleAutoprovisionFirmware = {
       return;
     }
 
+    // fileType carries leading dots — see the note in triggerReplacePicker.
     var config = FilesAPI.configureResumable({
       target: "".concat(Config.pbxUrl, "/pbxcore/api/v3/files:upload"),
-      fileType: ['rom', 'bin', 'fw', 'z'],
-      maxFileSize: moduleAutoprovisionFirmware.maxFileBytes,
-      query: function query() {
-        return {
-          category: 'autoprovision-firmware'
-        };
-      }
+      fileType: ['.rom', '.bin', '.fw', '.z'],
+      maxFileSize: moduleAutoprovisionFirmware.maxFileBytes
     });
     var resumable = new Resumable(config);
 

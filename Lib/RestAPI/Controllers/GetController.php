@@ -16,9 +16,9 @@ use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Modules\PbxExtensionUtils;
 use MikoPBX\PBXCoreREST\Controllers\Modules\ModulesControllerBase;
 use MikoPBX\PBXCoreREST\Lib\PbxExtensionsProcessor;
-use MikoPBX\Common\Library\Text;
 use Modules\ModuleAutoprovision\Lib\Autoprovision;
-use Modules\ModuleAutoprovision\Lib\Transliterate;
+use Modules\ModuleAutoprovision\Lib\Phonebook\YealinkPhonebook;
+use Modules\ModuleAutoprovision\Lib\ProvisionUrl;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
 use Modules\ModuleAutoprovision\Models\OtherPBX;
@@ -332,48 +332,29 @@ class GetController extends ModulesControllerBase
     }
     private function echoPhoneBookYealink($uri):void
     {
-        $phoneBook = "";
-        $nameBook = $_REQUEST['name']??'';
-        if(empty($nameBook)){
-            $phoneBook.= "<?xml version='1.0' encoding='UTF-8'?>".PHP_EOL;
-            // The original code substituted the container/host hostname directly
-            // into the XML root tag — producing nonsense like
-            // <a4706e46d81dIPPhoneDirectory> on a Docker host. Yealink's spec only
-            // recognises the literal "YealinkIPPhoneDirectory" envelope, so we
-            // hardcode "Yealink" here for the default-namespace branch.
-            $nameBook = 'Yealink';
-            $otherPbx = OtherPBX::find()->toArray();
-            $client = new Client();
-            foreach ($otherPbx as $pbx){
-                $address = trim($pbx['address']);
-                if($address === '127.0.0.1'){
-                    $nameBook = $pbx['name'];
-                    continue;
-                }
-                try {
-                    $response = $client->request('GET', "http://$address".AutoprovisionConf::BASE_URI.$uri."?name={$pbx['name']}", ['timeout' => 1, 'connect_timeout' => 1, 'read_timeout' => 1]);
-                    $code = $response->getStatusCode();
-                }catch (\Exception $e){
-                    $code = 0;
-                }
-                if ($code === 200) {
-                    $xmlContent = $response->getBody()->getContents();
-                    $isXmlValid = simplexml_load_string("<test>$xmlContent</test>");
-                    if ($isXmlValid !== false) {
-                        $phoneBook.= $xmlContent.PHP_EOL;
-                    }
-                }else{
-                    SystemMessages::sysLogMsg(self::LOG_TAG, "Fail get phonebook from $address, code: $code", LOG_WARNING);
-                }
-            }
-            unset($otherPbx);
+        $nameBook = $_REQUEST['name'] ?? '';
+        if (!is_scalar($nameBook)) {
+            // Массивный query-параметр (?name[]=x) не должен фаталить на ключе массива.
+            $this->response->setStatusCode(400, 'Bad Request');
+            $this->response->sendRaw();
+            $this->logHttpRequest(400, ['kind' => 'phonebook-yealink', 'error' => 'name-not-scalar']);
+            $this->terminateStreamedResponse();
+            return;
         }
+        $nameBook   = (string)$nameBook;
+        // Дочерний запрос (?name=...) приходит от другой АТС из OtherPBX.
+        // Непустое имя запрещает обход OtherPBX, иначе агрегация зациклится.
+        $isChildRequest = $nameBook !== '';
+        $title = $isChildRequest ? $nameBook : 'Yealink';
 
-        $bookUsers = [];
-        $tmpPhoneBookArray = [$nameBook=> ''];
+        // Локальные контакты: группы ModuleUsersGroups категоризируют общий
+        // справочник (это не права доступа — все SIP-контакты выдаются всем).
+        $groupsEnabled = class_exists('\Modules\ModuleUsersGroups\Models\UsersGroups')
+            && PbxExtensionUtils::isEnabled('ModuleUsersGroups');
         $manager = $this->di->get('modelsManager');
-        if(class_exists('\Modules\ModuleUsersGroups\Models\UsersGroups')
-            && PbxExtensionUtils::isEnabled('ModuleUsersGroups')){
+        $userGroupId = [];
+        $groupTitles = [];
+        if ($groupsEnabled) {
             $parameters = [
                 'models'     => [
                     'GroupMembers' => GroupMembers::class,
@@ -381,6 +362,7 @@ class GetController extends ModulesControllerBase
                 'columns'    => [
                     'user_id'   => 'GroupMembers.user_id',
                     'name'      => 'UsersGroups.name',
+                    'group_id'  => 'UsersGroups.id',
                 ],
                 'joins'      => [
                     'GroupMembers' => [
@@ -393,13 +375,13 @@ class GetController extends ModulesControllerBase
             ];
             $groupsData = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
             foreach ($groupsData as $group){
-                // Same key for both arrays, it becomes the XML tag name.
-                $bookName = $this->camelize($group['name']);
-                $bookUsers[$group['user_id']] = $bookName;
-                $tmpPhoneBookArray[$bookName] = '';
+                // При членстве в нескольких группах побеждает последняя запись —
+                // прежняя семантика, переопределять её без отдельного решения нельзя.
+                $gid = (string)$group['group_id'];
+                $userGroupId[(string)$group['user_id']] = $gid;
+                $groupTitles[$gid] = (string)$group['name'];
             }
         }
-
 
         $parameters = [
             'models'     => [
@@ -422,26 +404,94 @@ class GetController extends ModulesControllerBase
             ],
         ];
         $users = $manager->createBuilder($parameters)->getQuery()->execute()->toArray();
-        // $users    = Extensions::find(["type = 'SIP'", 'columns' => ['number', 'callerid', 'userid']])->toArray();
+        $commonEntries = [];
+        $groupEntries = [];
         foreach ($users as $userData) {
-            $book = $bookUsers[$userData['userid']]??$nameBook;
-            $name   = htmlspecialchars((string)$userData['username'], ENT_XML1);
-            $number = htmlspecialchars((string)$userData['number'], ENT_XML1);
-            $tmpPhoneBookArray[$book].= "\t".'<DirectoryEntry>'.PHP_EOL;
-            $tmpPhoneBookArray[$book].= "\t\t"."<Name>{$name}</Name>".PHP_EOL;
-            $tmpPhoneBookArray[$book].= "\t\t"."<Telephone>{$number}</Telephone>".PHP_EOL;
-            $tmpPhoneBookArray[$book].= "\t".'</DirectoryEntry>'.PHP_EOL;
-        }
-        foreach ($tmpPhoneBookArray as $key => $value){
-            if(empty($value)){
-                continue;
+            $entry = [
+                'name'      => (string)$userData['username'],
+                'telephone' => (string)$userData['number'],
+            ];
+            $gid = $userGroupId[(string)$userData['userid']] ?? '';
+            if ($groupsEnabled && $gid !== '') {
+                $groupEntries[$gid][] = $entry;
+            } else {
+                $commonEntries[] = $entry;
             }
-            $phoneBook.= "<{$key}IPPhoneDirectory>".PHP_EOL;
-            // Older Yealink models (T20P, T21P_E2) drop the book without <Title>.
-            $phoneBook.= "\t<Title>".htmlspecialchars((string)$key, ENT_XML1)."</Title>".PHP_EOL;
-            $phoneBook.= $value;
-            $phoneBook.= "</{$key}IPPhoneDirectory>".PHP_EOL;
         }
+        // Удалённые книги собираются до локальных: локальная запись OtherPBX
+        // (127.0.0.1) может переопределить название общей книги.
+        $remoteBooks = [];
+        if (!$isChildRequest) {
+            $otherPbx = OtherPBX::find()->toArray();
+            $client = new Client();
+            foreach ($otherPbx as $pbx){
+                $address = trim($pbx['address']);
+                if($address === '127.0.0.1'){
+                    // Локальная запись OtherPBX задаёт название книги.
+                    $title = (string)$pbx['name'];
+                    continue;
+                }
+                if($address === ''){
+                    SystemMessages::sysLogMsg(self::LOG_TAG, "Skip phonebook from empty OtherPBX address (id {$pbx['id']})", LOG_WARNING);
+                    continue;
+                }
+                // Пустое имя (и "0" в старых версиях с empty()) на принимающей
+                // стороне означает корневой запрос и снова запускает обход —
+                // гарантируем непустой маркер дочернего запроса.
+                $remoteName = (string)$pbx['name'];
+                if ($remoteName === '' || $remoteName === '0') {
+                    $remoteName = 'pbx-'.$pbx['id'];
+                }
+                try {
+                    $response = $client->request('GET', "http://$address".AutoprovisionConf::BASE_URI.$uri, [
+                        'timeout' => 1,
+                        'connect_timeout' => 1,
+                        'read_timeout' => 1,
+                        'query' => ['name' => $remoteName],
+                    ]);
+                    $code = $response->getStatusCode();
+                }catch (\Throwable $e){
+                    $code = 0;
+                }
+                if ($code === 200) {
+                    try {
+                        $sourceId = 'otherpbx:'.$pbx['id'];
+                        $remoteBooks = array_merge(
+                            $remoteBooks,
+                            YealinkPhonebook::import($response->getBody()->getContents(), $sourceId, (string)$pbx['name'])
+                        );
+                    }catch (\UnexpectedValueException $e){
+                        // Отказ одного источника не должен ломать выдачу остальных.
+                        SystemMessages::sysLogMsg(self::LOG_TAG, $e->getMessage(), LOG_WARNING);
+                    }catch (\Throwable $e){
+                        SystemMessages::sysLogMsg(self::LOG_TAG, "Fail read phonebook from $address", LOG_WARNING);
+                    }
+                }else{
+                    SystemMessages::sysLogMsg(self::LOG_TAG, "Fail get phonebook from $address, code: $code", LOG_WARNING);
+                }
+            }
+            unset($otherPbx, $client);
+        }
+
+        // Книга группы строится по ID, название остаётся данными XML (атрибут
+        // Menu/@Name) — числовые и кириллические названия больше не ломают теги.
+        $localBooks = [];
+        foreach ($groupEntries as $gid => $entries) {
+            $localBooks[] = [
+                'id'      => "local:group:{$gid}",
+                'title'   => $groupTitles[$gid] ?? $gid,
+                'entries' => $entries,
+            ];
+        }
+        if ($commonEntries !== []) {
+            $localBooks[] = ['id' => 'local:common', 'title' => $title, 'entries' => $commonEntries];
+        }
+
+        $phoneBook = YealinkPhonebook::render(
+            array_merge($localBooks, $remoteBooks),
+            $title,
+            !$isChildRequest
+        );
         $this->response->setHeader('Content-Description', "config file");
         $this->response->setHeader('Content-Disposition', "attachment; filename=".basename($uri).'.xml');
         // Yealink rejects text/plain and chunked transfer (ret=23), see #19.
@@ -470,19 +520,36 @@ class GetController extends ModulesControllerBase
         return '';
     }
 
-
-    private function camelize(string $inputString): string
-    {
-        $inputString = preg_replace('/\s+/', '-', $inputString);
-        $inputString = Transliterate::ruToLat($inputString);
-        $inputString = preg_replace('/[^A-Za-z0-9-]/u', '', $inputString);
-        return Text::camelize($inputString);
-    }
-
     /**
+     * Serves the PnP-issued config URL. The route is NoAuth by design (phones
+     * cannot log in), so the deterministic per-MAC HMAC signature (solt) is the
+     * only credential — verify it before any generation work. Answers 404 (not
+     * 403) to avoid revealing whether a MAC exists.
      */
     public function getConfig(): void
     {
+        $mode = AutoprovisionConf::getSoltMode();
+        if ($mode !== 'off') {
+            $mac    = strtolower(trim((string)($this->request->getQuery('mac') ?? '')));
+            $solt   = (string)($this->request->getQuery('solt') ?? '');
+            $secret = AutoprovisionConf::getProvisioningSecret();
+            $expected = $secret !== ''
+                ? ProvisionUrl::calculateSolt($mac, $secret)
+                : '';
+            if ($mac === '' || $solt === '' || $expected === '' || !hash_equals($expected, $solt)) {
+                // getcfg-no-secret: the check itself cannot run — most often the
+                // settings row is not readable yet (fresh install, mid-upgrade);
+                // everything else is a genuine signature mismatch.
+                $kind = $expected === '' ? 'getcfg-no-secret' : 'getcfg-bad-signature';
+                $this->logHttpRequest(404, ['kind' => $kind, 'mac' => $mac, 'mode' => $mode], LOG_WARNING);
+                if ($mode === 'enforce') {
+                    $this->response->setStatusCode(404, 'Not found');
+                    $this->response->sendRaw();
+                    $this->terminateStreamedResponse();
+                }
+                // 'log' mode: serve the config anyway — observation-only rollout.
+            }
+        }
         $this->streamModuleAction('getProvisionConfig');
     }
 
@@ -506,6 +573,10 @@ class GetController extends ModulesControllerBase
     {
         $payload = $this->request->getData();
         $payload['ip_srv'] = $_SERVER['SERVER_ADDR'];
+        // The backend worker only receives this payload, not the HTTP headers —
+        // yet getProvisionConfig needs the phone's User-Agent to resolve
+        // {FIRMWARE_URL} the same way the per-MAC HTTP endpoint does.
+        $payload['user_agent'] = (string)$this->request->getHeader('User-Agent');
         $this->sendRequestToBackendWorker(
             PbxExtensionsProcessor::class,
             $action,

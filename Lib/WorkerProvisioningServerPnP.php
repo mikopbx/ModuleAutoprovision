@@ -24,6 +24,7 @@ use MikoPBX\Core\System\SystemMessages;
 use MikoPBX\Core\Workers\WorkerBase;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovision;
 use Modules\ModuleAutoprovision\Models\ModuleAutoprovisionDevice;
+use Modules\ModuleAutoprovision\Models\TemplatesUsers;
 
 class WorkerProvisioningServerPnP extends WorkerBase
 {
@@ -490,7 +491,8 @@ class WorkerProvisioningServerPnP extends WorkerBase
             return [];
         }
 
-        if (count($this->mac_white) > 0 && ! in_array($headers['mac'], $this->mac_white, true)) {
+        $inWhite = in_array($headers['mac'], $this->mac_white, true);
+        if (count($this->mac_white) > 0 && !$inWhite) {
             // Если есть белый список, то черный не используем.
             // Провижить можно только белый список.
             SystemMessages::sysLogMsg(
@@ -501,8 +503,9 @@ class WorkerProvisioningServerPnP extends WorkerBase
             return [];
         }
 
-        if (count($this->mac_black) > 0 && in_array($headers['mac'], $this->mac_black, true)) {
-            // Если белый список пуст, то телефоны из черного списка провижить нельзя.
+        if (!$inWhite && count($this->mac_black) > 0 && in_array($headers['mac'], $this->mac_black, true)) {
+            // Whitelist membership wins over the blacklist: a MAC present in both
+            // lists must be provisioned, matching the whitelist-priority comment.
             SystemMessages::sysLogMsg(
                 self::LOG_TAG,
                 "rejecting MAC {$headers['mac']}: blacklisted",
@@ -579,7 +582,35 @@ class WorkerProvisioningServerPnP extends WorkerBase
         }
 
         if ( ! empty($headers['mac']) && ! empty($headers['phone_ip'])) {
-            /** @var ModuleAutoprovisionDevice $res */
+            $this->registerDiscoveredDevice($headers);
+        }
+
+        return $headers;
+    }
+
+    /**
+     * Persists the discovered device and makes it manageable from the settings page.
+     *
+     * host/port/model are refreshed on every sighting: the same-IP cleanup at the
+     * top of this method wipes host first, and the old "update only when port
+     * changed" guard left the
+     * row with an empty host whenever the phone kept its port — which also broke
+     * the later check-sync NOTIFY that targets ModuleAutoprovisionDevice.host.
+     *
+     * A TemplatesUsers row with empty userId/templateId is created on the first
+     * sighting so the phone shows up in the "Phone settings" tab by itself.
+     * MACs are compared in canonical form (MacAddress::normalize), so an
+     * admin-entered row in any case or separator variant counts as existing
+     * and no duplicate is created.
+     *
+     * All failures are logged and swallowed — the 200 OK and the NOTIFY with the
+     * provisioning URL must reach the phone regardless of the database state.
+     *
+     * @param array $headers Parsed SUBSCRIBE headers (mac, phone_ip, phone_port, Event).
+     */
+    private function registerDiscoveredDevice(array $headers): void
+    {
+        try {
             /** @var ModuleAutoprovisionDevice $devise */
             $devises = ModuleAutoprovisionDevice::find([
                 'host = :host:',
@@ -590,27 +621,55 @@ class WorkerProvisioningServerPnP extends WorkerBase
                 $devise->save();
             }
 
+            /** @var ModuleAutoprovisionDevice|null $res */
             $res = ModuleAutoprovisionDevice::findFirst([
                 'mac = :mac:',
                 'bind' => ['mac' => $headers['mac']],
             ]);
             if ($res === null) {
-                $res                     = new ModuleAutoprovisionDevice();
-                $res->mac                = $headers['mac'];
-                $res->port               = $headers['phone_port'];
-                $res->host               = $headers['phone_ip'];
-                $res->manufacturer_model = $headers['Event']['vendor'] . ' / ' . $headers['Event']['model'];
-                $res->save();
-            } elseif ($res->mac !== $headers['mac'] || $res->port !== $headers['phone_port']) {
-                $res->mac                = $headers['mac'];
-                $res->port               = $headers['phone_port'];
-                $res->host               = $headers['phone_ip'];
-                $res->manufacturer_model = $headers['Event']['vendor'] . ' / ' . $headers['Event']['model'];
-                $res->save();
+                $res = new ModuleAutoprovisionDevice();
             }
-        }
+            $res->mac                = $headers['mac'];
+            $res->port               = $headers['phone_port'];
+            $res->host               = $headers['phone_ip'];
+            $res->manufacturer_model = $headers['Event']['vendor'] . ' / ' . $headers['Event']['model'];
+            if ($res->save() === false) {
+                SystemMessages::sysLogMsg(
+                    self::LOG_TAG,
+                    'Failed to save device ' . $headers['mac'] . ': ' . implode(', ', $res->getMessages()),
+                    LOG_ERR
+                );
+            }
 
-        return $headers;
+            // A binding typed with separators (0c:38:…) is the same phone: compare
+            // canonical forms so discovery does not create a duplicate placeholder.
+            $bindingExists = false;
+            foreach (TemplatesUsers::find(['columns' => 'mac']) as $candidate) {
+                if (MacAddress::normalize((string)$candidate->mac) === $headers['mac']) {
+                    $bindingExists = true;
+                    break;
+                }
+            }
+            if (!$bindingExists) {
+                $binding             = new TemplatesUsers();
+                $binding->mac        = $headers['mac'];
+                $binding->userId     = '';
+                $binding->templateId = '';
+                if ($binding->save() === false) {
+                    SystemMessages::sysLogMsg(
+                        self::LOG_TAG,
+                        'Failed to create a binding row for ' . $headers['mac'] . ': ' . implode(', ', $binding->getMessages()),
+                        LOG_ERR
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            SystemMessages::sysLogMsg(
+                self::LOG_TAG,
+                'Device registration failed for ' . $headers['mac'] . ': ' . $e->getMessage(),
+                LOG_ERR
+            );
+        }
     }
 
     /**
@@ -654,8 +713,26 @@ class WorkerProvisioningServerPnP extends WorkerBase
         $this->sendToHost($sock, $headers['phone_ip'], (int)$headers['phone_port'], $msg);
         $this->verbose("\n" . $msg);
 
-        $provisionUrl = "$this->url/getcfg?mac={$headers['mac']}&" . http_build_query($headers['Event']);
-        $provisionUrl .= '&solt=' . md5($headers['mac'] . getmypid());
+        // The secret is re-read per SUBSCRIBE: the worker may start before
+        // installDB() has written the settings row (or before Phalcon picks up
+        // the new columns after an update) — a secret cached at startup was ''
+        // for the whole process lifetime, and every issued URL then carried a
+        // provably invalid empty-key HMAC that getcfg rejected under enforce.
+        $secret = AutoprovisionConf::getProvisioningSecret();
+        if ($secret === '') {
+            SystemMessages::sysLogMsg(
+                self::LOG_TAG,
+                'provisioning_secret is empty — issuing an unsigned getcfg URL '
+                    . "(it will be rejected while solt_mode=enforce) for mac={$headers['mac']}",
+                LOG_WARNING
+            );
+        }
+        // solt goes FIRST: Fanvil phones truncate the provisioning URL at a
+        // parameter boundary, so a trailing solt never reached the PBX. Putting
+        // it right after mac keeps the signature while the expendable trailing
+        // vendor/model/version fields may be cut off by the phone.
+        $eventParams  = is_array($headers['Event'] ?? null) ? $headers['Event'] : [];
+        $provisionUrl = ProvisionUrl::buildProvisionUrl($this->url, (string)$headers['mac'], $eventParams, $secret);
 
         $msg = "NOTIFY sip:{$headers['phone_ip']}:{$headers['phone_port']} SIP/2.0\r\n" .
             "{$headers['Via']}\r\n" .

@@ -216,9 +216,15 @@ var moduleAutoprovision = {
     return result;
   },
   cbAfterSendForm: function cbAfterSendForm(response) {
-    // Form.js calls this on both success and failure paths. On failure the controller
+    // Form.js ignores non-error flash messages on the success path —
+    // surface the check-sync skip warning (phone without a known host) here.
+    var warnings = (response.message || {}).warning || [];
+    warnings.forEach(function (text) {
+      UserMessage.showWarning(text);
+    }); // Form.js calls this on both success and failure paths. On failure the controller
     // rolled the transaction back, so leave the marked-for-delete rows visible — removing
     // them would lie about the DB state.
+
     if (response.success === true) {
       $('tr.marked-for-delete').remove();
     } // Re-bind freshly inserted rows from mock ids to real database ids.
@@ -266,10 +272,19 @@ var moduleAutoprovision = {
       };
     }).get();
     $('td[data-label="template"] div.scrolling.menu').each(function rebuild() {
-      var $menu = $(this).empty();
+      var $menu = $(this).empty(); // Keep a genuinely empty blank option: the placeholder row id must never
+      // leak into phone_settings.templateId as a saved value.
+
+      var emptyLabel = $(this).closest('div.dropdown').data('empty-item-label') || '';
+      $menu.append($('<div>').attr('data-value', '').attr('class', 'item').text(emptyLabel));
       templates.forEach(function (_ref6) {
         var id = _ref6.id,
             name = _ref6.name;
+
+        if (id === 'emptyTemplateRow') {
+          return;
+        }
+
         $menu.append($('<div>').attr('data-value', id).attr('class', 'item').text(name));
       });
     });

@@ -54,6 +54,14 @@ return [
     'mod_Autoprovision_templates_uri_template'   => 'Шаблон',
     'mod_Autoprovision_phone_settings_user' => 'Сотрудник',
     'mod_Autoprovision_phone_settings_mac'  => 'MAC Адрес',
+    'mod_Autoprovision_select_employee'     => 'Выберите сотрудника',
+    'mod_Autoprovision_select_template'     => 'Выберите шаблон',
+    'mod_Autoprovision_reboot_unavailable'  => 'Конфиг сохранён; перезагрузка недоступна для телефонов: %macs%. Конфигурация применится при следующем обновлении',
+    'mod_Autoprovision_solt_mode'           => 'Проверка подписи URL (HMAC)',
+    'mod_Autoprovision_solt_mode_enforce'   => 'Требовать подпись (рекомендуется)',
+    'mod_Autoprovision_solt_mode_log'       => 'Только логировать (конфиг отдаётся всем)',
+    'mod_Autoprovision_solt_mode_off'       => 'Отключена',
+    'mod_Autoprovision_solt_mode_hint'      => 'Подпись защищает getcfg от скачивания конфигурации по чужому MAC. Если у телефона перестала работать автонастройка после обновления — переключите в «Только логировать» и проверьте лог autoprovision-http.',
     'mod_Autoprovision_template_name'  => 'Наименование',
     'mod_Autoprovision_search_tags'  => 'Поиск...',
     'mod_Autoprovision_filter_posts'  => '',
@@ -62,7 +70,7 @@ return [
     'mod_Autoprovision_other_pbx'  => 'Телефонная книга',
     'mod_Autoprovision_other_pbx_name'  => 'Наименование АТС',
     'mod_Autoprovision_other_pbx_address'  => 'Сетевой адрес АТС',
-    'mod_Autoprovision_templates_header'  => 'При описании шаблона допускается использовать параметры: <b>{SIP_USER_NAME}</b> - имя сотрудника <b>{SIP_NUM}</b>  - внутренний номер (логин) <b>{SIP_PASS}</b>  - пароль',
+    'mod_Autoprovision_templates_header'  => 'При описании шаблона допускается использовать параметры: <b>{SIP_USER_NAME}</b> - имя сотрудника <b>{SIP_NUM}</b>  - внутренний номер (логин) <b>{SIP_PASS}</b>  - пароль <b>{PBX_HOST}</b> - адрес АТС <b>{SIP_PORT}</b> - SIP-порт АТС (UDP/TCP, не TLS)',
     'mod_Autoprovision_other_pbx_header'  => '<b>Внимание!</b> Телефонная книга должна быть доступна для каждой АТС по URI <b>/pbxcore/api/autoprovision-http/phonebook</b><br> 
 Перечислите все адреса, АТС, с которых необходимо получить телефонную книгу. <br> ',
 

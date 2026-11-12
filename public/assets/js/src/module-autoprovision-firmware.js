@@ -271,13 +271,17 @@ const moduleAutoprovisionFirmware = {
 			input.style.display = 'none';
 			document.body.appendChild(input);
 
+			// No `category`: Core's files:upload rejects unknown categories
+			// (only sound/image/csv/archive/firmware exist). Uploading without
+			// one is the supported path for modules — the per-vendor extension
+			// whitelist in the module's REST actions does the real validation.
 			const config = FilesAPI.configureResumable({
 				target: `${Config.pbxUrl}/pbxcore/api/v3/files:upload`,
-				fileType: ['rom', 'bin', 'fw', 'z'],
+				// Leading dots are required: Resumable's accept-attribute builder
+				// prefixes them only for multi-char entries, so a bare 'z' ends up
+				// without a dot and browsers drop it from the file-picker filter.
+				fileType: ['.rom', '.bin', '.fw', '.z'],
 				maxFileSize: moduleAutoprovisionFirmware.maxFileBytes,
-				query() {
-					return { category: 'autoprovision-firmware' };
-				},
 			});
 			const resumable = new Resumable(config);
 			if (!resumable.support) {
@@ -367,13 +371,15 @@ const moduleAutoprovisionFirmware = {
 		if (typeof FilesAPI === 'undefined' || typeof Resumable === 'undefined') {
 			return;
 		}
+		// No `category`: Core's files:upload rejects unknown categories
+		// (only sound/image/csv/archive/firmware exist). Uploading without
+		// one is the supported path for modules — the per-vendor extension
+		// whitelist in the module's REST actions does the real validation.
+		// fileType carries leading dots — see the note in triggerReplacePicker.
 		const config = FilesAPI.configureResumable({
 			target: `${Config.pbxUrl}/pbxcore/api/v3/files:upload`,
-			fileType: ['rom', 'bin', 'fw', 'z'],
+			fileType: ['.rom', '.bin', '.fw', '.z'],
 			maxFileSize: moduleAutoprovisionFirmware.maxFileBytes,
-			query() {
-				return { category: 'autoprovision-firmware' };
-			},
 		});
 
 		const resumable = new Resumable(config);
