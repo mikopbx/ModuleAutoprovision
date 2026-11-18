@@ -1,7 +1,6 @@
 <?php
-
-declare(strict_types=1);
-/*
+return [
+    /*
  * MikoPBX - free phone system for small business
  * Copyright © 2017-2024 Alexey Portnov and Nikolay Beketov
  *
@@ -18,8 +17,6 @@ declare(strict_types=1);
  * You should have received a copy of the GNU General Public License along with this program.
  * If not, see <https://www.gnu.org/licenses/>.
  */
-
-return [
     'repModuleAutoprovision' => 'Módulo -% represent%',
     'fw_moduleautoprovisionDescription' => 'Autoprovisionamento - entrega da configuração dos telefones via HTTP',
     'fw_moduleautoprovisionDescriptionHint' => 'Porta TCP dedicada servida pelo ModuleAutoprovision em HTTP simples (sem redirecionamento para HTTPS).<br>Os telefones IP obtêm seus arquivos de configuração desta porta durante o provisionamento.<br>Abra o acesso apenas para a rede local em que os telefones estão.',
@@ -51,7 +48,7 @@ return [
     'mod_Autoprovision_load_examples_unsaved_warning' => 'Há alterações não salvas na página. Carregar os exemplos recarregará a página e as descartará. Continuar?',
     'mod_Autoprovision_load_examples_post_only' => 'É necessária uma requisição POST.',
     'mod_Autoprovision_templates_uri_uri' => 'URI',
-    'mod_Autoprovision_templates_uri_template' => 'Amostra',
+    'mod_Autoprovision_templates_uri_template' => 'Modelo',
     'mod_Autoprovision_phone_settings_user' => 'Funcionário',
     'mod_Autoprovision_phone_settings_mac' => 'Endereço MAC',
     'mod_Autoprovision_template_name' => 'Nome',
@@ -87,4 +84,12 @@ A configuração automática é possível apenas para a rede local da empresa, p
     'mod_Autoprovision_firmware_edit_title' => 'Editar metadados do firmware',
     'mod_Autoprovision_firmware_save' => 'Salvar',
     'mod_Autoprovision_firmware_cancel' => 'Cancelar',
+    'mod_Autoprovision_select_template' => 'Selecione um modelo',
+    'mod_Autoprovision_solt_mode_log' => 'Apenas registrar em log (a configuração é enviada a todos)',
+    'mod_Autoprovision_solt_mode_off' => 'Desativada',
+    'mod_Autoprovision_select_employee' => 'Selecione um funcionário',
+    'mod_Autoprovision_reboot_unavailable' => 'Configuração salva; reinicialização indisponível para os telefones: %macs%. A configuração será aplicada na próxima atualização',
+    'mod_Autoprovision_solt_mode' => 'Verificação de assinatura de URL (HMAC)',
+    'mod_Autoprovision_solt_mode_enforce' => 'Exigir assinatura (recomendado)',
+    'mod_Autoprovision_solt_mode_hint' => 'A assinatura protege o getcfg contra o download da configuração usando o MAC de outro dispositivo. Se o provisionamento automático do telefone parar de funcionar após a atualização, mude para "Apenas registrar em log" e verifique o log autoprovision-http.',
 ];
